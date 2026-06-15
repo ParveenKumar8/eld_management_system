@@ -121,7 +121,13 @@ class _PhoneLayout extends ConsumerWidget {
         _HosSection(hosCubit: hosCubit),
         const SizedBox(height: AppSpacing.lg),
         BlocBuilder<EldBloc, EldState>(
-          builder: (_, eld) => EldLiveMapCard(eldData: eld.latestData),
+          builder: (_, eld) {
+            final phoneFix = ref.watch(locationFixStreamProvider).valueOrNull;
+            return EldLiveMapCard(
+              eldData: eld.latestData,
+              phoneFix: phoneFix,
+            );
+          },
         ),
         const SizedBox(height: AppSpacing.lg),
         _DutySection(driverId: driverId, hosCubit: hosCubit),
@@ -156,10 +162,14 @@ class _TabletLayout extends ConsumerWidget {
         Expanded(
           flex: 6,
           child: BlocBuilder<EldBloc, EldState>(
-            builder: (_, eld) => EldLiveMapCard(
-              eldData: eld.latestData,
-              height: Responsive.mapHeight(context) + 80,
-            ),
+            builder: (_, eld) {
+              final phoneFix = ref.watch(locationFixStreamProvider).valueOrNull;
+              return EldLiveMapCard(
+                eldData: eld.latestData,
+                phoneFix: phoneFix,
+                height: Responsive.mapHeight(context) + 80,
+              );
+            },
           ),
         ),
       ],
@@ -217,6 +227,8 @@ class _MetricsRow extends StatelessWidget {
         return 'Tap to manage';
       case EldConnectionState.connecting:
         return 'Connecting…';
+      case EldConnectionState.verifying:
+        return 'Verifying ELD…';
       case EldConnectionState.scanning:
         return 'Scanning…';
       case EldConnectionState.reconnecting:

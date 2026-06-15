@@ -1,4 +1,8 @@
 import 'package:eld_management_system/core/di/providers.dart';
+import 'package:eld_management_system/core/location/location_tracking_status.dart';
+import 'package:eld_management_system/core/notifications/driver_alerts_controller.dart';
+import 'package:eld_management_system/core/strings/location_strings.dart';
+import 'package:eld_management_system/core/strings/notification_strings.dart';
 import 'package:eld_management_system/core/theme/app_colors.dart';
 import 'package:eld_management_system/core/theme/app_spacing.dart';
 import 'package:eld_management_system/core/utils/responsive.dart';
@@ -49,27 +53,18 @@ class SettingsPage extends ConsumerWidget {
           EldFadeIn(
             delay: const Duration(milliseconds: 80),
             child: _SettingsGroup(
-            title: 'Notifications',
-            children: [
-              _ToggleTile(
-                icon: Icons.notifications_active_rounded,
-                label: 'ELD & HOS Alerts',
-                value: true,
-                onChanged: null,
-              ),
-            ],
-          ),
+              title: 'Notifications',
+              children: const [
+                _DriverAlertsToggle(),
+              ],
+            ),
           ),
           EldFadeIn(
             delay: const Duration(milliseconds: 160),
             child: _SettingsGroup(
             title: 'Privacy & Compliance',
             children: const [
-              _InfoTile(
-                icon: Icons.location_on_rounded,
-                label: 'Background Location',
-                subtitle: 'Required for FMCSA ELD compliance',
-              ),
+              _LocationTrackingStatusTile(),
               _InfoTile(
                 icon: Icons.shield_rounded,
                 label: 'Crash Reporting',
@@ -179,16 +174,58 @@ class _ThemeOption extends StatelessWidget {
   }
 }
 
+class _DriverAlertsToggle extends ConsumerWidget {
+  const _DriverAlertsToggle();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final alerts = ref.watch(driverAlertsEnabledProvider);
+
+    return alerts.when(
+      loading: () => const _ToggleTile(
+        icon: Icons.notifications_active_rounded,
+        label: NotificationStrings.settingsToggleTitle,
+        subtitle: NotificationStrings.settingsToggleSubtitle,
+        value: true,
+        onChanged: null,
+      ),
+      error: (_, __) => const _ToggleTile(
+        icon: Icons.notifications_active_rounded,
+        label: NotificationStrings.settingsToggleTitle,
+        subtitle: NotificationStrings.settingsToggleSubtitle,
+        value: false,
+        onChanged: null,
+      ),
+      data: (enabled) => _ToggleTile(
+        icon: Icons.notifications_active_rounded,
+        label: NotificationStrings.settingsToggleTitle,
+        subtitle: NotificationStrings.settingsToggleSubtitle,
+        value: enabled,
+        onChanged: (value) async {
+          final ok = await ref.read(driverAlertsEnabledProvider.notifier).setEnabled(value);
+          if (!ok && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text(NotificationStrings.permissionRequired)),
+            );
+          }
+        },
+      ),
+    );
+  }
+}
+
 class _ToggleTile extends StatelessWidget {
   const _ToggleTile({
     required this.icon,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.subtitle,
   });
 
   final IconData icon;
   final String label;
+  final String? subtitle;
   final bool value;
   final ValueChanged<bool>? onChanged;
 
@@ -205,7 +242,21 @@ class _ToggleTile extends StatelessWidget {
         children: [
           Icon(icon, color: AppColors.navy),
           const SizedBox(width: 14),
-          Expanded(child: Text(label)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: Theme.of(context).textTheme.titleSmall),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+              ],
+            ),
+          ),
           Switch.adaptive(value: value, onChanged: onChanged),
         ],
       ),
@@ -213,16 +264,59 @@ class _ToggleTile extends StatelessWidget {
   }
 }
 
+class _LocationTrackingStatusTile extends ConsumerWidget {
+  const _LocationTrackingStatusTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(locationTrackingStatusProvider);
+
+    return status.when(
+      loading: () => const _InfoTile(
+        icon: Icons.location_on_rounded,
+        label: LocationStrings.settingsStatusTitle,
+        subtitle: 'Checking GPS status…',
+      ),
+      error: (_, __) => const _InfoTile(
+        icon: Icons.location_off_rounded,
+        label: LocationStrings.settingsStatusTitle,
+        subtitle: LocationStrings.permissionRequired,
+      ),
+      data: (value) => _InfoTile(
+        icon: _iconFor(value),
+        label: LocationStrings.settingsStatusTitle,
+        subtitle: LocationStrings.statusSubtitle(value),
+        trailing: value == LocationTrackingStatus.trackingBackground ||
+                value == LocationTrackingStatus.trackingForeground
+            ? const Icon(Icons.gps_fixed_rounded, color: AppColors.navy, size: 20)
+            : null,
+      ),
+    );
+  }
+
+  IconData _iconFor(LocationTrackingStatus status) => switch (status) {
+        LocationTrackingStatus.trackingForeground ||
+        LocationTrackingStatus.trackingBackground =>
+          Icons.my_location_rounded,
+        LocationTrackingStatus.permissionDenied ||
+        LocationTrackingStatus.serviceDisabled =>
+          Icons.location_disabled_rounded,
+        LocationTrackingStatus.idle => Icons.location_on_rounded,
+      };
+}
+
 class _InfoTile extends StatelessWidget {
   const _InfoTile({
     required this.icon,
     required this.label,
     required this.subtitle,
+    this.trailing,
   });
 
   final IconData icon;
   final String label;
   final String subtitle;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -252,6 +346,7 @@ class _InfoTile extends StatelessWidget {
               ],
             ),
           ),
+          if (trailing != null) trailing!,
         ],
       ),
     );

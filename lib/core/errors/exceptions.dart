@@ -25,6 +25,11 @@ final class BleException extends AppException {
   const BleException(super.message, {super.code});
 }
 
+final class IncompatibleEldException extends BleException {
+  const IncompatibleEldException({String? message})
+      : super(message ?? 'Device is not ELD-compatible', code: 'eld_incompatible');
+}
+
 final class PermissionException extends AppException {
   const PermissionException(super.message, {super.code});
 }

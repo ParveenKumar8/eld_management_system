@@ -62,6 +62,7 @@
 		<string>bluetooth-central</string>
 		<string>location</string>
 		<string>fetch</string>
+		<string>remote-notification</string>
 	</array>
 </dict>
 </plist>

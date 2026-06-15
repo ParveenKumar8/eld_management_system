@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:eld_management_system/core/constants/app_constants.dart';
 import 'package:eld_management_system/core/errors/exceptions.dart';
 import 'package:eld_management_system/core/logging/app_logger.dart';
+import 'package:eld_management_system/core/strings/ble_strings.dart';
 import 'package:eld_management_system/features/ble/data/parsers/geometris_parser.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_data.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_device.dart';
-import 'package:eld_management_system/core/strings/ble_strings.dart';
+import 'package:eld_management_system/features/ble/domain/entities/eld_device_compatibility.dart';
+import 'package:eld_management_system/features/ble/domain/services/eld_compatibility.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 /// BLE data source using flutter_blue_plus with auto-reconnect.
@@ -48,30 +49,15 @@ class BleDataSource {
 
   Stream<List<EldDevice>> scan({Duration timeout = const Duration(seconds: 15)}) async* {
     _connectionController.add(EldConnectionState.scanning);
-    await FlutterBluePlus.startScan(
-      timeout: timeout,
-      withServices: [Guid(AppConstants.geometrisServiceUuid)],
-    );
+    await FlutterBluePlus.startScan(timeout: timeout);
 
     final devices = <String, EldDevice>{};
     await for (final results in FlutterBluePlus.scanResults) {
-      for (final r in results) {
-        final name = r.device.platformName.isNotEmpty
-            ? r.device.platformName
-            : r.advertisementData.advName;
-        if (name.isEmpty) continue;
-        if (!name.toUpperCase().contains('WHERE') &&
-            !name.toUpperCase().contains('GEOMETRIS') &&
-            !name.toUpperCase().contains('ELD')) {
-          continue;
-        }
-        devices[r.device.remoteId.str] = EldDevice(
-          id: r.device.remoteId.str,
-          name: name,
-          rssi: r.rssi,
-        );
+      for (final result in results) {
+        final device = _mapScanResult(result);
+        devices[device.id] = device;
       }
-      yield devices.values.toList();
+      yield _sortedDevices(devices.values);
     }
     await FlutterBluePlus.stopScan();
     if (_connectedDevice == null) {
@@ -79,8 +65,15 @@ class BleDataSource {
     }
   }
 
+  Future<void> stopScan() async {
+    await FlutterBluePlus.stopScan();
+    if (_connectedDevice == null) {
+      _connectionController.add(EldConnectionState.disconnected);
+    }
+  }
+
   Future<void> connect(String deviceId) async {
-    _connectionController.add(EldConnectionState.connecting);
+    _connectionController.add(EldConnectionState.verifying);
     _lastDeviceId = deviceId;
     _reconnectAttempts = 0;
 
@@ -88,61 +81,97 @@ class BleDataSource {
     final device = BluetoothDevice.fromId(deviceId);
     _connectedDevice = device;
 
-    await device.connect(
-      autoConnect: true,
-      mtu: null,
-      timeout: const Duration(seconds: 20),
-    );
+    try {
+      await device.connect(
+        autoConnect: false,
+        mtu: null,
+        timeout: const Duration(seconds: 20),
+      );
 
-    _stateSubscription?.cancel();
-    _stateSubscription = device.connectionState.listen((state) {
-      if (state == BluetoothConnectionState.disconnected) {
-        _connectionController.add(EldConnectionState.reconnecting);
-        _scheduleReconnect();
-      } else if (state == BluetoothConnectionState.connected) {
-        _connectionController.add(EldConnectionState.connected);
-        _reconnectAttempts = 0;
+      final services = await device.discoverServices();
+      if (!EldCompatibility.hasEldServices(services)) {
+        await device.disconnect();
+        _connectedDevice = null;
+        _connectionController.add(EldConnectionState.disconnected);
+        throw const IncompatibleEldException(message: BleStrings.deviceNotEldCompatible);
       }
-    });
 
-    await _subscribeToNotifications(device);
-    _connectionController.add(EldConnectionState.connected);
-    AppLogger.info('Connected to ELD: $deviceId');
+      _stateSubscription?.cancel();
+      _stateSubscription = device.connectionState.listen((state) {
+        if (state == BluetoothConnectionState.disconnected) {
+          _connectionController.add(EldConnectionState.reconnecting);
+          _scheduleReconnect();
+        } else if (state == BluetoothConnectionState.connected) {
+          _connectionController.add(EldConnectionState.connected);
+          _reconnectAttempts = 0;
+        }
+      });
+
+      await _subscribeToNotifications(device, services);
+      _connectionController.add(EldConnectionState.connected);
+      AppLogger.info('Connected to ELD: $deviceId');
+    } catch (e) {
+      if (e is! IncompatibleEldException) {
+        _connectedDevice = null;
+        _connectionController.add(EldConnectionState.disconnected);
+      }
+      rethrow;
+    }
   }
 
-  Future<void> _subscribeToNotifications(BluetoothDevice device) async {
-    final services = await device.discoverServices();
-    BluetoothCharacteristic? notifyChar;
+  EldDevice _mapScanResult(ScanResult result) {
+    final name = _displayName(result);
+    return EldDevice(
+      id: result.device.remoteId.str,
+      name: name,
+      rssi: result.rssi,
+      compatibility: EldCompatibility.hintFromAdvertisement(
+        name: name,
+        serviceUuids: result.advertisementData.serviceUuids,
+      ),
+    );
+  }
 
-    for (final service in services) {
-      if (service.uuid.str.toLowerCase().contains('fff0') ||
-          service.uuid == Guid(AppConstants.geometrisServiceUuid)) {
-        for (final c in service.characteristics) {
-          if (c.properties.notify || c.properties.indicate) {
-            notifyChar = c;
-            break;
-          }
-        }
-      }
-    }
+  String _displayName(ScanResult result) {
+    final name = result.device.platformName.isNotEmpty
+        ? result.device.platformName
+        : result.advertisementData.advName;
+    if (name.isNotEmpty) return name;
+    final id = result.device.remoteId.str;
+    final suffix = id.length > 8 ? id.substring(id.length - 8) : id;
+    return 'Bluetooth device • $suffix';
+  }
 
-    notifyChar ??= _findFirstNotifiable(services);
+  List<EldDevice> _sortedDevices(Iterable<EldDevice> devices) {
+    final list = devices.toList()
+      ..sort((a, b) {
+        final hintCompare = _compatibilityRank(b.compatibility)
+            .compareTo(_compatibilityRank(a.compatibility));
+        if (hintCompare != 0) return hintCompare;
+        return b.rssi.compareTo(a.rssi);
+      });
+    return list;
+  }
+
+  int _compatibilityRank(EldDeviceCompatibility compatibility) => switch (compatibility) {
+        EldDeviceCompatibility.compatible => 3,
+        EldDeviceCompatibility.likely => 2,
+        EldDeviceCompatibility.unknown => 1,
+        EldDeviceCompatibility.incompatible => 0,
+      };
+
+  Future<void> _subscribeToNotifications(
+    BluetoothDevice device,
+    List<BluetoothService> services,
+  ) async {
+    final notifyChar = EldCompatibility.findEldNotifyCharacteristic(services);
     if (notifyChar == null) {
-      throw BleException(BleStrings.noNotifiableCharacteristic);
+      throw const BleException(BleStrings.noNotifiableCharacteristic);
     }
 
     await notifyChar.setNotifyValue(true);
     _notifySubscription?.cancel();
     _notifySubscription = notifyChar.lastValueStream.listen(_onRawData);
-  }
-
-  BluetoothCharacteristic? _findFirstNotifiable(List<BluetoothService> services) {
-    for (final s in services) {
-      for (final c in s.characteristics) {
-        if (c.properties.notify) return c;
-      }
-    }
-    return null;
   }
 
   void _onRawData(List<int> bytes) {

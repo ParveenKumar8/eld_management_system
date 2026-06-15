@@ -10,6 +10,7 @@ abstract interface class EldRepository {
   ResultFuture<bool> openPermissionSettings();
   ResultFuture<bool> isBluetoothAvailable();
   Stream<List<EldDevice>> scanDevices({Duration timeout = const Duration(seconds: 15)});
+  ResultFuture<void> stopScan();
   ResultFuture<void> connect(String deviceId);
   ResultFuture<void> disconnect();
   Stream<EldData> watchEldData();

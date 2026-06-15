@@ -4,4 +4,7 @@ abstract final class BleStrings {
   static const noNotifiableCharacteristic = 'No notifiable characteristic found on the ELD device.';
   static const scanFailed = 'BLE scan failed. Check permissions and try again.';
   static const connectFailed = 'Could not connect to the ELD device.';
+  static const deviceNotEldCompatible =
+      'This Bluetooth device does not appear to be ELD-compatible. Select a Geometris Whereqube or certified ELD unit.';
+  static const verifyingCompatibility = 'Checking ELD compatibility…';
 }

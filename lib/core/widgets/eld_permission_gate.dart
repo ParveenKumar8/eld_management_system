@@ -29,6 +29,7 @@ class EldPermissionGate extends StatelessWidget {
   bool get _hasBlocked => statuses.any((s) => s.needsSettings);
 
   bool get _allRequiredGranted =>
+      statuses.isNotEmpty &&
       statuses.where((s) => s.required).every((s) => s.isGranted);
 
   @override

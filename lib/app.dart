@@ -1,4 +1,9 @@
+import 'package:eld_management_system/core/di/injection.dart';
 import 'package:eld_management_system/core/di/providers.dart';
+import 'package:eld_management_system/core/location/location_tracking_bridge.dart';
+import 'package:eld_management_system/core/notifications/notification_bridge.dart';
+import 'package:eld_management_system/core/notifications/remote_push_bridge.dart';
+import 'package:eld_management_system/core/notifications/notification_tap_handler.dart';
 import 'package:eld_management_system/core/theme/app_theme.dart';
 import 'package:eld_management_system/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:eld_management_system/features/ble/presentation/widgets/ble_connection_overlay.dart';
@@ -24,6 +29,7 @@ class _EldAppState extends ConsumerState<EldApp> {
   void initState() {
     super.initState();
     _router = createAppRouter(widget.authBloc);
+    sl<NotificationTapHandler>().attach(_router);
   }
 
   @override
@@ -48,8 +54,14 @@ class _EldAppState extends ConsumerState<EldApp> {
           AppThemeMode.system => ThemeMode.system,
         },
         routerConfig: _router,
-        builder: (context, child) => BleConnectionOverlay(
-          child: child ?? const SizedBox.shrink(),
+        builder: (context, child) => RemotePushBridge(
+          child: LocationTrackingBridge(
+            child: NotificationBridge(
+              child: BleConnectionOverlay(
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
+          ),
         ),
       ),
     );

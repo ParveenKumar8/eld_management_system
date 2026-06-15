@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:eld_management_system/core/strings/ble_strings.dart';
 import 'package:eld_management_system/core/theme/app_colors.dart';
 import 'package:eld_management_system/core/theme/app_spacing.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_device.dart';
@@ -31,15 +32,18 @@ class _BleConnectionOverlayState extends State<BleConnectionOverlay> {
   }
 
   void _onState(EldState state) {
-    if (state.connectionState == EldConnectionState.connecting ||
+    if (state.connectionState == EldConnectionState.verifying ||
+        state.connectionState == EldConnectionState.connecting ||
         state.connectionState == EldConnectionState.reconnecting) {
       _dismissTimer?.cancel();
       setState(() {
         _visible = true;
         _success = false;
-        _message = state.connectionState == EldConnectionState.reconnecting
-            ? 'Reconnecting to ELD…'
-            : 'Connecting to ELD…';
+        _message = switch (state.connectionState) {
+          EldConnectionState.verifying => BleStrings.verifyingCompatibility,
+          EldConnectionState.reconnecting => 'Reconnecting to ELD…',
+          _ => 'Connecting to ELD…',
+        };
       });
     } else if (state.connectionState == EldConnectionState.connected) {
       setState(() {

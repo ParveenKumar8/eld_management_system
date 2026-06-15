@@ -11,6 +11,9 @@ import 'package:eld_management_system/core/widgets/eld_screen.dart';
 import 'package:eld_management_system/core/widgets/eld_status_badge.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_device.dart';
 import 'package:eld_management_system/features/ble/presentation/bloc/eld_bloc.dart';
+import 'package:eld_management_system/features/devices/presentation/widgets/eld_ble_scan_progress.dart';
+import 'package:eld_management_system/features/devices/presentation/widgets/eld_device_compatibility_badge.dart';
+import 'package:eld_management_system/features/devices/presentation/widgets/eld_scan_no_results.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -37,6 +40,7 @@ class _DevicesPageState extends State<DevicesPage> {
       case EldConnectionState.connecting:
       case EldConnectionState.reconnecting:
       case EldConnectionState.scanning:
+      case EldConnectionState.verifying:
         return EldBadgeTone.warning;
       case EldConnectionState.disconnected:
         return EldBadgeTone.neutral;
@@ -44,6 +48,14 @@ class _DevicesPageState extends State<DevicesPage> {
   }
 
   EldState _effectiveState(EldState state) => state is EldError ? (state.previous ?? state) : state;
+
+  String _connectionLabel(EldState state) {
+    if (state.isScanning) return DeviceStrings.connectionScanning;
+    if (state.connectionState == EldConnectionState.verifying) {
+      return DeviceStrings.connectionVerifying;
+    }
+    return state.connectionState.name;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +75,12 @@ class _DevicesPageState extends State<DevicesPage> {
           },
           builder: (context, state) {
             final viewState = _effectiveState(state);
+            final isScanning = viewState.isScanning && viewState.scanStartedAt != null;
+            final canStartScan = !isScanning && !viewState.permissionsLoading;
+            final showNoResults =
+                viewState.scanPhase == EldScanPhase.completed && viewState.devices.isEmpty;
+            final showInitialEmpty =
+                viewState.scanPhase == EldScanPhase.idle && viewState.devices.isEmpty;
 
             return Column(
               children: [
@@ -70,14 +88,23 @@ class _DevicesPageState extends State<DevicesPage> {
                   child: EldPageHeader(
                     title: DeviceStrings.pageTitle,
                     trailing: IconButton(
-                      onPressed: () => context.read<EldBloc>().add(const EldScanStarted()),
+                      onPressed: canStartScan
+                          ? () => context.read<EldBloc>().add(const EldScanStarted())
+                          : null,
                       icon: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          gradient: AppColors.accentGradient,
+                          gradient: canStartScan ? AppColors.accentGradient : null,
+                          color: canStartScan ? null : AppColors.navy.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.radar_rounded, color: AppColors.navy, size: 20),
+                        child: !canStartScan
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.navy),
+                              )
+                            : const Icon(Icons.radar_rounded, color: AppColors.navy, size: 20),
                       ),
                     ),
                   ),
@@ -105,34 +132,56 @@ class _DevicesPageState extends State<DevicesPage> {
                   padding: EdgeInsets.symmetric(horizontal: padding.left),
                   child: EldFadeIn(
                     delay: const Duration(milliseconds: 80),
-                    child: _ConnectionCard(state: viewState, tone: _tone(viewState.connectionState)),
+                    child: _ConnectionCard(
+                      state: viewState,
+                      tone: _tone(viewState.connectionState),
+                      statusLabel: _connectionLabel(viewState),
+                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Expanded(
-                  child: viewState.devices.isEmpty
-                      ? EldEmptyState(
-                          icon: Icons.sensors_rounded,
-                          title: DeviceStrings.emptyTitle,
-                          subtitle: DeviceStrings.emptySubtitle,
-                          actionLabel: DeviceStrings.startScan,
-                          onAction: () =>
-                              context.read<EldBloc>().add(const EldScanStarted()),
-                        )
-                      : GridView.builder(
-                          padding: EdgeInsets.fromLTRB(padding.left, 0, padding.right, 120),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: columns,
-                            mainAxisSpacing: AppSpacing.sm,
-                            crossAxisSpacing: AppSpacing.sm,
-                            childAspectRatio: Responsive.isDesktop(context) ? 2.8 : 2.2,
-                          ),
-                          itemCount: viewState.devices.length,
-                          itemBuilder: (_, i) => EldFadeIn(
-                            delay: Duration(milliseconds: 60 * i),
-                            child: _DeviceCard(device: viewState.devices[i]),
-                          ),
-                        ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 380),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: isScanning
+                        ? EldBleScanProgress(
+                            key: const ValueKey('scanning'),
+                            startedAt: viewState.scanStartedAt!,
+                            deviceCount: viewState.devices.length,
+                            devices: viewState.devices,
+                            onCancel: () =>
+                                context.read<EldBloc>().add(const EldScanStopped()),
+                          )
+                        : showNoResults
+                            ? EldScanNoResults(
+                                key: const ValueKey('no-results'),
+                                onScanAgain: () =>
+                                    context.read<EldBloc>().add(const EldScanStarted()),
+                              )
+                            : showInitialEmpty
+                                ? EldEmptyState(
+                                    key: const ValueKey('initial-empty'),
+                                    icon: Icons.sensors_rounded,
+                                    title: DeviceStrings.emptyTitle,
+                                    subtitle: DeviceStrings.emptySubtitle,
+                                    actionLabel: DeviceStrings.startScan,
+                                    onAction: canStartScan
+                                        ? () =>
+                                            context.read<EldBloc>().add(const EldScanStarted())
+                                        : null,
+                                  )
+                                : _DeviceResults(
+                                    key: ValueKey('results-${viewState.devices.length}'),
+                                    devices: viewState.devices,
+                                    columns: columns,
+                                    padding: padding,
+                                    verifyingDeviceId: viewState.verifyingDeviceId,
+                                    onScanAgain: () =>
+                                        context.read<EldBloc>().add(const EldScanStarted()),
+                                  ),
+                  ),
                 ),
                 if (viewState.connectionState == EldConnectionState.connected)
                   Padding(
@@ -153,10 +202,97 @@ class _DevicesPageState extends State<DevicesPage> {
   }
 }
 
+class _DeviceResults extends StatelessWidget {
+  const _DeviceResults({
+    required this.devices,
+    required this.columns,
+    required this.padding,
+    required this.onScanAgain,
+    this.verifyingDeviceId,
+    super.key,
+  });
+
+  final List<EldDevice> devices;
+  final int columns;
+  final EdgeInsets padding;
+  final VoidCallback onScanAgain;
+  final String? verifyingDeviceId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(padding.left, 0, padding.right, AppSpacing.sm),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      DeviceStrings.resultsHeader,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      DeviceStrings.resultsCount(devices.length),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      DeviceStrings.resultsHint,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onScanAgain,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(DeviceStrings.scanAgain),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: GridView.builder(
+            padding: EdgeInsets.fromLTRB(padding.left, 0, padding.right, 120),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              mainAxisSpacing: AppSpacing.sm,
+              crossAxisSpacing: AppSpacing.sm,
+              childAspectRatio: Responsive.isDesktop(context) ? 2.8 : 2.2,
+            ),
+            itemCount: devices.length,
+            itemBuilder: (_, i) => EldFadeIn(
+              delay: Duration(milliseconds: 60 * i),
+              child: _DeviceCard(
+                device: devices[i],
+                isVerifying: verifyingDeviceId == devices[i].id,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ConnectionCard extends StatelessWidget {
-  const _ConnectionCard({required this.state, required this.tone});
+  const _ConnectionCard({
+    required this.state,
+    required this.tone,
+    required this.statusLabel,
+  });
+
   final EldState state;
   final EldBadgeTone tone;
+  final String statusLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -172,7 +308,9 @@ class _ConnectionCard extends StatelessWidget {
           Icon(
             state.connectionState == EldConnectionState.connected
                 ? Icons.bluetooth_connected_rounded
-                : Icons.bluetooth_rounded,
+                : state.isScanning
+                    ? Icons.bluetooth_searching_rounded
+                    : Icons.bluetooth_rounded,
             color: AppColors.navy,
           ),
           const SizedBox(width: 12),
@@ -184,11 +322,15 @@ class _ConnectionCard extends StatelessWidget {
                   DeviceStrings.connectionStatusTitle,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
-                Text(state.connectionState.name, style: Theme.of(context).textTheme.bodySmall),
+                Text(statusLabel, style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
           ),
-          EldStatusBadge(label: state.connectionState.name, tone: tone, pulsing: tone == EldBadgeTone.success),
+          EldStatusBadge(
+            label: statusLabel,
+            tone: tone,
+            pulsing: tone == EldBadgeTone.success || state.isScanning,
+          ),
         ],
       ),
     );
@@ -196,8 +338,9 @@ class _ConnectionCard extends StatelessWidget {
 }
 
 class _DeviceCard extends StatelessWidget {
-  const _DeviceCard({required this.device});
+  const _DeviceCard({required this.device, this.isVerifying = false});
   final EldDevice device;
+  final bool isVerifying;
 
   @override
   Widget build(BuildContext context) {
@@ -205,7 +348,9 @@ class _DeviceCard extends StatelessWidget {
       color: Theme.of(context).cardTheme.color,
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       child: InkWell(
-        onTap: () => context.read<EldBloc>().add(EldConnectRequested(device.id)),
+        onTap: isVerifying
+            ? null
+            : () => context.read<EldBloc>().add(EldConnectRequested(device.id)),
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -221,7 +366,13 @@ class _DeviceCard extends StatelessWidget {
                   color: AppColors.teal.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.router_rounded, color: AppColors.teal),
+                child: isVerifying
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.teal),
+                      )
+                    : const Icon(Icons.router_rounded, color: AppColors.teal),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -232,7 +383,12 @@ class _DeviceCard extends StatelessWidget {
                     Text(
                       device.name,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 4),
+                    EldDeviceCompatibilityBadge(compatibility: device.compatibility),
+                    const SizedBox(height: 4),
                     Text(
                       DeviceStrings.signalDetail(device.rssi),
                       style: Theme.of(context).textTheme.bodySmall,
@@ -240,7 +396,10 @@ class _DeviceCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_rounded, size: 18),
+              Icon(
+                isVerifying ? Icons.hourglass_top_rounded : Icons.arrow_forward_rounded,
+                size: 18,
+              ),
             ],
           ),
         ),

@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
+import 'package:eld_management_system/core/constants/app_constants.dart';
 import 'package:eld_management_system/core/permissions/eld_permission_kind.dart';
 import 'package:eld_management_system/core/permissions/permission_status_info.dart';
 import 'package:eld_management_system/core/strings/ble_strings.dart';
+import 'package:eld_management_system/core/strings/permission_strings.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_data.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_device.dart';
+import 'package:eld_management_system/features/ble/domain/entities/eld_device_compatibility.dart';
 import 'package:eld_management_system/features/ble/domain/repositories/eld_repository.dart';
 import 'package:equatable/equatable.dart';
 
@@ -26,6 +29,7 @@ class EldBloc extends Bloc<EldEvent, EldState> {
     on<_EldConnectionChanged>(_onConnectionChanged);
     on<_EldDevicesUpdated>(_onDevicesUpdated);
     on<_EldErrorOccurred>(_onError);
+    on<_EldScanCompleted>(_onScanCompleted);
   }
 
   final EldRepository _repository;
@@ -33,7 +37,8 @@ class EldBloc extends Bloc<EldEvent, EldState> {
   StreamSubscription<EldData>? _dataSub;
   StreamSubscription<EldConnectionState>? _connSub;
 
-  Future<void> _onPermissions(EldPermissionsRequested event, Emitter<EldState> emit) async {
+  Future<void> _onPermissions(
+      EldPermissionsRequested event, Emitter<EldState> emit) async {
     await _runPermissionFlow(emit);
   }
 
@@ -62,7 +67,8 @@ class EldBloc extends Bloc<EldEvent, EldState> {
     emit(state.copyWith(permissionsLoading: true));
     final result = await _repository.requestPermissions(kind: event.kind);
     result.fold(
-      (f) => emit(EldError(f.message, previous: state.copyWith(permissionsLoading: false))),
+      (f) => emit(EldError(f.message,
+          previous: state.copyWith(permissionsLoading: false))),
       (grant) => emit(
         state.copyWith(
           permissionStatuses: grant.statuses,
@@ -73,7 +79,8 @@ class EldBloc extends Bloc<EldEvent, EldState> {
     );
   }
 
-  Future<void> _onOpenSettings(EldOpenSettingsRequested event, Emitter<EldState> emit) async {
+  Future<void> _onOpenSettings(
+      EldOpenSettingsRequested event, Emitter<EldState> emit) async {
     await _repository.openPermissionSettings();
     add(const EldPermissionsRefreshRequested());
   }
@@ -124,84 +131,203 @@ class EldBloc extends Bloc<EldEvent, EldState> {
 
   Future<void> _onScan(EldScanStarted event, Emitter<EldState> emit) async {
     final baseline = _viewState(state);
-    if (!baseline.permissionsGranted) {
+    final startedAt = DateTime.now();
+
+    emit(
+      baseline.copyWith(
+        devices: const [],
+        connectionState: EldConnectionState.scanning,
+        scanPhase: EldScanPhase.scanning,
+        scanStartedAt: startedAt,
+      ),
+    );
+
+    if (!_permissionsReady(_viewState(state))) {
       await _runPermissionFlow(emit);
     }
 
     final ready = _viewState(state);
-    if (!ready.permissionsGranted) return;
+    if (!_permissionsReady(ready)) {
+      final reverted = ready.copyWith(
+        connectionState: EldConnectionState.disconnected,
+        scanPhase: EldScanPhase.idle,
+        clearScanStartedAt: true,
+      );
+      final hadError = state is EldError;
+      emit(reverted);
+      if (!hadError) {
+        emit(EldError(PermissionStrings.deniedSummaryPrefix, previous: reverted));
+      }
+      return;
+    }
 
     await _scanSub?.cancel();
-    emit(EldScanning(
-      devices: ready.devices,
-      connectionState: EldConnectionState.scanning,
-      permissionsGranted: ready.permissionsGranted,
-      permissionStatuses: ready.permissionStatuses,
-    ));
-
-    _scanSub = _repository.scanDevices().listen(
-      (devices) => add(_EldDevicesUpdated(devices)),
-      onError: (Object e) => add(_EldErrorOccurred(e.toString())),
+    emit(
+      EldScanning(
+        devices: const [],
+        connectionState: EldConnectionState.scanning,
+        permissionsGranted: _permissionsReady(ready),
+        permissionStatuses: ready.permissionStatuses,
+        scanPhase: EldScanPhase.scanning,
+        scanStartedAt: startedAt,
+      ),
     );
+
+    _scanSub = _repository.scanDevices(timeout: AppConstants.bleScanTimeout).listen(
+          (devices) => add(_EldDevicesUpdated(devices)),
+          onError: (Object e) => add(_EldErrorOccurred(e.toString())),
+          onDone: () => add(const _EldScanCompleted()),
+        );
 
     _connSub ??= _repository.watchConnectionState().listen(
-      (s) => add(_EldConnectionChanged(s)),
-    );
+          (s) => add(_EldConnectionChanged(s)),
+        );
   }
 
   Future<void> _onStopScan(EldScanStopped event, Emitter<EldState> emit) async {
     await _scanSub?.cancel();
-    emit(state.copyWith(connectionState: EldConnectionState.disconnected));
+    await _repository.stopScan();
+    emit(
+      state.copyWith(
+        connectionState: EldConnectionState.disconnected,
+        scanPhase: EldScanPhase.idle,
+        clearScanStartedAt: true,
+      ),
+    );
   }
 
-  Future<void> _onConnect(EldConnectRequested event, Emitter<EldState> emit) async {
-    emit(state.copyWith(connectionState: EldConnectionState.connecting));
+  void _onScanCompleted(_EldScanCompleted event, Emitter<EldState> emit) {
+    emit(
+      EldScanning(
+        devices: state.devices,
+        connectionState: EldConnectionState.disconnected,
+        latestData: state.latestData,
+        permissionsGranted: state.permissionsGranted,
+        permissionStatuses: state.permissionStatuses,
+        permissionsLoading: state.permissionsLoading,
+        scanPhase: EldScanPhase.completed,
+        verifyingDeviceId: state.verifyingDeviceId,
+      ),
+    );
+  }
+
+  Future<void> _onConnect(
+      EldConnectRequested event, Emitter<EldState> emit) async {
+    final baseline = _viewState(state);
+    emit(
+      baseline.copyWith(
+        connectionState: EldConnectionState.verifying,
+        verifyingDeviceId: event.deviceId,
+      ),
+    );
+
     final result = await _repository.connect(event.deviceId);
     result.fold(
-      (f) => emit(EldError(f.message, previous: state)),
+      (f) {
+        final compatibility = f.code == 'eld_incompatible'
+            ? EldDeviceCompatibility.incompatible
+            : null;
+        final devices = compatibility == null
+            ? baseline.devices
+            : _updateDeviceCompatibility(baseline.devices, event.deviceId, compatibility);
+        emit(
+          EldError(
+            f.message,
+            previous: baseline.copyWith(
+              devices: devices,
+              connectionState: EldConnectionState.disconnected,
+              clearVerifyingDeviceId: true,
+            ),
+          ),
+        );
+      },
       (_) {
+        final devices = _updateDeviceCompatibility(
+          baseline.devices,
+          event.deviceId,
+          EldDeviceCompatibility.compatible,
+        );
+        emit(
+          baseline.copyWith(
+            devices: devices,
+            connectionState: EldConnectionState.connected,
+            clearVerifyingDeviceId: true,
+          ),
+        );
         _dataSub?.cancel();
         _dataSub = _repository.watchEldData().listen(
-          (d) => add(_EldDataReceived(d)),
-        );
+              (d) => add(_EldDataReceived(d)),
+            );
       },
     );
   }
 
-  Future<void> _onDisconnect(EldDisconnectRequested event, Emitter<EldState> emit) async {
+  Future<void> _onDisconnect(
+      EldDisconnectRequested event, Emitter<EldState> emit) async {
     await _dataSub?.cancel();
     await _repository.disconnect();
     emit(state.copyWith(connectionState: EldConnectionState.disconnected));
   }
 
   void _onDataReceived(_EldDataReceived event, Emitter<EldState> emit) {
-    emit(state.copyWith(latestData: event.data, connectionState: EldConnectionState.connected));
+    emit(state.copyWith(
+        latestData: event.data, connectionState: EldConnectionState.connected));
   }
 
-  void _onConnectionChanged(_EldConnectionChanged event, Emitter<EldState> emit) {
+  void _onConnectionChanged(
+      _EldConnectionChanged event, Emitter<EldState> emit) {
     emit(state.copyWith(connectionState: event.state));
   }
 
   void _onDevicesUpdated(_EldDevicesUpdated event, Emitter<EldState> emit) {
-    emit(EldScanning(
-      devices: event.devices,
-      connectionState: state.connectionState,
-      latestData: state.latestData,
-      permissionsGranted: state.permissionsGranted,
-      permissionStatuses: state.permissionStatuses,
-      permissionsLoading: state.permissionsLoading,
-    ));
+    emit(
+      EldScanning(
+        devices: event.devices,
+        connectionState: state.connectionState,
+        latestData: state.latestData,
+        permissionsGranted: state.permissionsGranted,
+        permissionStatuses: state.permissionStatuses,
+        permissionsLoading: state.permissionsLoading,
+        scanPhase: EldScanPhase.scanning,
+        scanStartedAt: state.scanStartedAt,
+      ),
+    );
   }
 
   void _onError(_EldErrorOccurred event, Emitter<EldState> emit) {
-    emit(EldError(event.message, previous: state));
+    emit(
+      EldError(
+        event.message,
+        previous: state.copyWith(
+          connectionState: EldConnectionState.disconnected,
+          scanPhase: EldScanPhase.completed,
+          clearScanStartedAt: true,
+        ),
+      ),
+    );
   }
 
   bool _requiredGranted(List<PermissionStatusInfo> items) =>
-      items.where((s) => s.required).every((s) => s.isGranted);
+      items.isNotEmpty && items.where((s) => s.required).every((s) => s.isGranted);
+
+  bool _permissionsReady(EldState state) =>
+      state.permissionsGranted || _requiredGranted(state.permissionStatuses);
 
   EldState _viewState(EldState current) =>
       current is EldError ? (current.previous ?? current) : current;
+
+  List<EldDevice> _updateDeviceCompatibility(
+    List<EldDevice> devices,
+    String deviceId,
+    EldDeviceCompatibility compatibility,
+  ) =>
+      devices
+          .map(
+            (device) => device.id == deviceId
+                ? device.copyWith(compatibility: compatibility)
+                : device,
+          )
+          .toList();
 
   @override
   Future<void> close() {
@@ -230,4 +356,8 @@ final class _EldDevicesUpdated extends EldEvent {
 final class _EldErrorOccurred extends EldEvent {
   const _EldErrorOccurred(this.message);
   final String message;
+}
+
+final class _EldScanCompleted extends EldEvent {
+  const _EldScanCompleted();
 }

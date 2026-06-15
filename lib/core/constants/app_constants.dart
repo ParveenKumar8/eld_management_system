@@ -22,15 +22,18 @@ abstract final class AppConstants {
       '0000fff0-0000-1000-8000-00805f9b34fb';
   static const String geometrisNotifyUuid =
       '0000fff1-0000-1000-8000-00805f9b34fb';
+  static const Duration bleScanTimeout = Duration(seconds: 15);
 
   // Storage keys
   static const String hiveBoxHos = 'hos_records';
   static const String hiveBoxEld = 'eld_buffer';
   static const String hiveBoxAuth = 'auth_cache';
+  static const String hiveBoxLocation = 'location_trail';
   static const String secureKeyAccessToken = 'access_token';
   static const String secureKeyRefreshToken = 'refresh_token';
 
   // Background
   static const String androidForegroundChannelId = 'eld_connection_channel';
+  static const String androidRemotePushChannelId = 'remote_push_alerts';
   static const String workmanagerTaskSync = 'eld_sync_task';
 }

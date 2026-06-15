@@ -64,6 +64,16 @@ class EldRepositoryImpl implements EldRepository {
   }
 
   @override
+  ResultFuture<void> stopScan() async {
+    try {
+      await _ble.stopScan();
+      return const Right(null);
+    } catch (e) {
+      return Left(BleFailure(e.toString()));
+    }
+  }
+
+  @override
   ResultFuture<void> connect(String deviceId) async {
     try {
       await _permissions.ensureRequiredGranted();
@@ -71,6 +81,8 @@ class EldRepositoryImpl implements EldRepository {
       return const Right(null);
     } on PermissionException catch (e) {
       return Left(PermissionFailure(e.message, code: e.code));
+    } on IncompatibleEldException catch (e) {
+      return Left(BleFailure(e.message, code: e.code));
     } on BleException catch (e) {
       return Left(BleFailure(e.message, code: e.code));
     } catch (e) {
