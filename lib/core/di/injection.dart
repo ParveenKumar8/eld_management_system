@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:eld_management_system/core/network/dio_client.dart';
+import 'package:eld_management_system/core/permissions/permission_service.dart';
 import 'package:eld_management_system/core/security/secure_storage_service.dart';
 import 'package:eld_management_system/features/auth/data/datasources/auth_local_datasource.dart';
 import 'package:eld_management_system/features/auth/data/datasources/auth_remote_datasource.dart';
@@ -41,11 +42,12 @@ Future<void> configureDependencies() async {
   );
 
   sl.registerLazySingleton<GeometrisParser>(GeometrisParser.new);
+  sl.registerLazySingleton<PermissionService>(PermissionService.new);
   sl.registerLazySingleton<BleDataSource>(
     () => BleDataSource(parser: sl<GeometrisParser>()),
   );
   sl.registerLazySingleton<EldRepository>(
-    () => EldRepositoryImpl(sl<BleDataSource>()),
+    () => EldRepositoryImpl(sl<BleDataSource>(), sl<PermissionService>()),
   );
 
   sl.registerLazySingleton<HosLocalDataSource>(HosLocalDataSource.new);

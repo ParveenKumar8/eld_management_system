@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
+import 'package:eld_management_system/core/permissions/eld_permission_kind.dart';
+import 'package:eld_management_system/core/permissions/permission_status_info.dart';
+import 'package:eld_management_system/core/strings/ble_strings.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_data.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_device.dart';
 import 'package:eld_management_system/features/ble/domain/repositories/eld_repository.dart';
@@ -12,6 +15,9 @@ part 'eld_state.dart';
 class EldBloc extends Bloc<EldEvent, EldState> {
   EldBloc(this._repository) : super(const EldInitial()) {
     on<EldPermissionsRequested>(_onPermissions);
+    on<EldPermissionsRefreshRequested>(_onRefreshPermissions);
+    on<EldPermissionItemRequested>(_onPermissionItem);
+    on<EldOpenSettingsRequested>(_onOpenSettings);
     on<EldScanStarted>(_onScan);
     on<EldScanStopped>(_onStopScan);
     on<EldConnectRequested>(_onConnect);
@@ -28,23 +34,110 @@ class EldBloc extends Bloc<EldEvent, EldState> {
   StreamSubscription<EldConnectionState>? _connSub;
 
   Future<void> _onPermissions(EldPermissionsRequested event, Emitter<EldState> emit) async {
-    emit(state.copyWithLoading());
+    await _runPermissionFlow(emit);
+  }
+
+  Future<void> _onRefreshPermissions(
+    EldPermissionsRefreshRequested event,
+    Emitter<EldState> emit,
+  ) async {
+    emit(state.copyWith(permissionsLoading: true));
+    final statuses = await _repository.getPermissionStatuses();
+    statuses.fold(
+      (f) => emit(EldError(f.message, previous: state)),
+      (items) => emit(
+        state.copyWith(
+          permissionStatuses: items,
+          permissionsGranted: _requiredGranted(items),
+          permissionsLoading: false,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onPermissionItem(
+    EldPermissionItemRequested event,
+    Emitter<EldState> emit,
+  ) async {
+    emit(state.copyWith(permissionsLoading: true));
+    final result = await _repository.requestPermissions(kind: event.kind);
+    result.fold(
+      (f) => emit(EldError(f.message, previous: state.copyWith(permissionsLoading: false))),
+      (grant) => emit(
+        state.copyWith(
+          permissionStatuses: grant.statuses,
+          permissionsGranted: grant.allRequiredGranted,
+          permissionsLoading: false,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onOpenSettings(EldOpenSettingsRequested event, Emitter<EldState> emit) async {
+    await _repository.openPermissionSettings();
+    add(const EldPermissionsRefreshRequested());
+  }
+
+  Future<void> _runPermissionFlow(Emitter<EldState> emit) async {
+    emit(state.copyWith(permissionsLoading: true));
+
     final btResult = await _repository.isBluetoothAvailable();
     final unavailable = btResult.fold((_) => true, (available) => !available);
     if (unavailable) {
-      emit(EldError('Bluetooth is unavailable', previous: state));
+      emit(
+        EldError(
+          BleStrings.bluetoothUnavailable,
+          previous: state.copyWith(permissionsLoading: false),
+        ),
+      );
       return;
     }
-    final perm = await _repository.requestPermissions();
-    perm.fold(
-      (f) => emit(EldError(f.message, previous: state)),
-      (_) => emit(state.copyWith(permissionsGranted: true)),
+
+    final refresh = await _repository.getPermissionStatuses();
+    await refresh.fold(
+      (f) async => emit(EldError(f.message, previous: state)),
+      (statuses) async {
+        emit(state.copyWith(permissionStatuses: statuses));
+        final grant = await _repository.requestPermissions();
+        grant.fold(
+          (f) => emit(
+            EldError(
+              f.message,
+              previous: state.copyWith(
+                permissionStatuses: statuses,
+                permissionsGranted: false,
+                permissionsLoading: false,
+              ),
+            ),
+          ),
+          (result) => emit(
+            state.copyWith(
+              permissionStatuses: result.statuses,
+              permissionsGranted: result.allRequiredGranted,
+              permissionsLoading: false,
+            ),
+          ),
+        );
+      },
     );
   }
 
   Future<void> _onScan(EldScanStarted event, Emitter<EldState> emit) async {
+    final baseline = _viewState(state);
+    if (!baseline.permissionsGranted) {
+      await _runPermissionFlow(emit);
+    }
+
+    final ready = _viewState(state);
+    if (!ready.permissionsGranted) return;
+
     await _scanSub?.cancel();
-    emit(EldScanning(devices: state.devices, connectionState: EldConnectionState.scanning));
+    emit(EldScanning(
+      devices: ready.devices,
+      connectionState: EldConnectionState.scanning,
+      permissionsGranted: ready.permissionsGranted,
+      permissionStatuses: ready.permissionStatuses,
+    ));
 
     _scanSub = _repository.scanDevices().listen(
       (devices) => add(_EldDevicesUpdated(devices)),
@@ -95,12 +188,20 @@ class EldBloc extends Bloc<EldEvent, EldState> {
       connectionState: state.connectionState,
       latestData: state.latestData,
       permissionsGranted: state.permissionsGranted,
+      permissionStatuses: state.permissionStatuses,
+      permissionsLoading: state.permissionsLoading,
     ));
   }
 
   void _onError(_EldErrorOccurred event, Emitter<EldState> emit) {
     emit(EldError(event.message, previous: state));
   }
+
+  bool _requiredGranted(List<PermissionStatusInfo> items) =>
+      items.where((s) => s.required).every((s) => s.isGranted);
+
+  EldState _viewState(EldState current) =>
+      current is EldError ? (current.previous ?? current) : current;
 
   @override
   Future<void> close() {
@@ -111,7 +212,6 @@ class EldBloc extends Bloc<EldEvent, EldState> {
   }
 }
 
-// Private internal events
 final class _EldDataReceived extends EldEvent {
   const _EldDataReceived(this.data);
   final EldData data;

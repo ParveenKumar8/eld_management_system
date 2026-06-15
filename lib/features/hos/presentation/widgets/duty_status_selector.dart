@@ -1,3 +1,5 @@
+import 'package:eld_management_system/core/theme/app_colors.dart';
+import 'package:eld_management_system/core/theme/app_spacing.dart';
 import 'package:eld_management_system/features/hos/domain/entities/duty_status.dart';
 import 'package:flutter/material.dart';
 
@@ -8,30 +10,92 @@ class DutyStatusSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: AppSpacing.sm,
+      crossAxisSpacing: AppSpacing.sm,
+      childAspectRatio: 2.2,
       children: DutyStatus.values.map((status) {
-        return FilterChip(
-          label: Text(status.displayName),
-          selected: false,
-          onSelected: (_) => onSelected(status),
-          avatar: Icon(_iconFor(status), size: 18),
+        final (color, icon) = _style(status);
+        return _DutyCard(
+          label: status.displayName,
+          icon: icon,
+          color: color,
+          onTap: () => onSelected(status),
         );
       }).toList(),
     );
   }
 
-  IconData _iconFor(DutyStatus status) {
+  (Color, IconData) _style(DutyStatus status) {
     switch (status) {
       case DutyStatus.driving:
-        return Icons.directions_car;
+        return (AppColors.amber, Icons.directions_car_filled_rounded);
       case DutyStatus.onDutyNotDriving:
-        return Icons.work;
+        return (AppColors.teal, Icons.work_outline_rounded);
       case DutyStatus.offDuty:
-        return Icons.hotel;
+        return (const Color(0xFF6366F1), Icons.weekend_rounded);
       case DutyStatus.sleeperBerth:
-        return Icons.bed;
+        return (const Color(0xFF8B5CF6), Icons.bed_rounded);
     }
+  }
+}
+
+class _DutyCard extends StatelessWidget {
+  const _DutyCard({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).cardTheme.color,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -5,6 +5,10 @@ abstract final class AppConstants {
     'API_BASE_URL',
     defaultValue: 'https://api.example-eld.com/v1',
   );
+  static const String googleMapsApiKey = String.fromEnvironment(
+    'GOOGLE_MAPS_API_KEY',
+    defaultValue: '',
+  );
 
   // FMCSA HOS limits (property-carrying CMV, 60/7 rule baseline)
   static const int maxDrivingMinutesPerDay = 11 * 60;

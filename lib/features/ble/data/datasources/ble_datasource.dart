@@ -7,8 +7,8 @@ import 'package:eld_management_system/core/logging/app_logger.dart';
 import 'package:eld_management_system/features/ble/data/parsers/geometris_parser.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_data.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_device.dart';
+import 'package:eld_management_system/core/strings/ble_strings.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 /// BLE data source using flutter_blue_plus with auto-reconnect.
 class BleDataSource {
@@ -44,26 +44,6 @@ class BleDataSource {
       AppLogger.error('Bluetooth availability check', e);
       return false;
     }
-  }
-
-  Future<bool> requestPermissions() async {
-    final permissions = <Permission>[
-      Permission.bluetooth,
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.location,
-      Permission.locationAlways,
-      if (Platform.isAndroid) Permission.notification,
-    ];
-
-    final statuses = await permissions.request();
-    final denied = statuses.entries.where((e) => e.value.isDenied || e.value.isPermanentlyDenied);
-    if (denied.isNotEmpty) {
-      throw PermissionException(
-        'Required permissions denied: ${denied.map((e) => e.key).join(', ')}',
-      );
-    }
-    return true;
   }
 
   Stream<List<EldDevice>> scan({Duration timeout = const Duration(seconds: 15)}) async* {
@@ -148,7 +128,7 @@ class BleDataSource {
 
     notifyChar ??= _findFirstNotifiable(services);
     if (notifyChar == null) {
-      throw BleException('No notifiable characteristic found');
+      throw BleException(BleStrings.noNotifiableCharacteristic);
     }
 
     await notifyChar.setNotifyValue(true);

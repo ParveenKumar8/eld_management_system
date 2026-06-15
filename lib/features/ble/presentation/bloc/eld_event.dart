@@ -10,6 +10,21 @@ final class EldPermissionsRequested extends EldEvent {
   const EldPermissionsRequested();
 }
 
+final class EldPermissionsRefreshRequested extends EldEvent {
+  const EldPermissionsRefreshRequested();
+}
+
+final class EldPermissionItemRequested extends EldEvent {
+  const EldPermissionItemRequested(this.kind);
+  final EldPermissionKind kind;
+  @override
+  List<Object?> get props => [kind];
+}
+
+final class EldOpenSettingsRequested extends EldEvent {
+  const EldOpenSettingsRequested();
+}
+
 final class EldScanStarted extends EldEvent {
   const EldScanStarted();
 }

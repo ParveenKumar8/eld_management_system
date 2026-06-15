@@ -21,9 +21,19 @@ flutter run
 | Variable | Description |
 |----------|-------------|
 | `API_BASE_URL` | Backend API base URL (default: demo endpoint) |
+| `GOOGLE_MAPS_API_KEY` | Google Maps SDK key for live tracking |
 
 ```bash
 flutter run --dart-define=API_BASE_URL=https://your-api.com/v1
+```
+
+**Google Maps setup:**
+- Android: add to `android/gradle.properties` → `GOOGLE_MAPS_API_KEY=your_key`
+- iOS: set `GMSApiKey` in `ios/Runner/Info.plist`
+
+Regenerate app icon after changing `assets/images/app_icon.png`:
+```bash
+dart run flutter_launcher_icons
 ```
 
 ### Social Auth Setup
@@ -105,6 +115,16 @@ lib/
 - Annotations on status changes
 - Malfunction/diagnostic logging hooks
 - JSON export for roadside inspection
+
+### Responsive & Tablet
+- Breakpoints: phone (<600dp), tablet (600–1024dp), desktop (1024dp+)
+- `EldScreen` wraps all pages with `SafeArea` + max-width centering on tablets
+- Dashboard uses side-by-side layout on tablets (HOS + live map)
+- Device list and reports use 2-column grids on tablets
+
+### Live Maps & BLE Animation
+- `EldLiveMapCard` — Google Maps with ELD GPS marker and telemetry overlay
+- `BleConnectionOverlay` — Lottie animation during BLE connect/reconnect
 
 ### Background
 - `workmanager` periodic sync (15 min)

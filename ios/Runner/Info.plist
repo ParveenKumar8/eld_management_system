@@ -55,6 +55,8 @@
 	<string>Location is required for ELD duty status records.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>Background location enables continuous ELD compliance when the app is not in foreground.</string>
+	<key>GMSApiKey</key>
+	<string></string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
