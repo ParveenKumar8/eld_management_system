@@ -1,0 +1,86 @@
+name: eld_management_system
+description: Enterprise FMCSA compliant ELD Management System for US trucking fleets.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+  flutter_bloc: ^8.1.6
+  bloc: ^8.1.4
+  equatable: ^2.0.7
+
+  # Navigation
+  go_router: ^14.6.2
+
+  # Networking
+  dio: ^5.7.0
+  retrofit: ^4.4.1
+  json_annotation: ^4.9.0
+
+  # Local storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  flutter_secure_storage: ^9.2.2
+  path_provider: ^2.1.5
+
+  # BLE & background
+  flutter_blue_plus: ^1.35.2
+  permission_handler: ^11.3.1
+  workmanager: ^0.6.0
+
+  # Auth & security
+  google_sign_in: ^6.2.2
+  flutter_facebook_auth: ^7.1.1
+  sign_in_with_apple: ^6.1.3
+  crypto: ^3.0.6
+  encrypt: ^5.0.3
+
+  # Maps & location
+  google_maps_flutter: ^2.10.0
+  geolocator: ^13.0.2
+
+  # UI
+  intl: ^0.19.0
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.4.1
+
+  # Utilities
+  logger: ^2.5.0
+  uuid: ^4.5.1
+  connectivity_plus: ^6.1.1
+  freezed_annotation: ^2.4.4
+  dartz: ^0.10.1
+  get_it: ^8.0.2
+  injectable: ^2.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.13
+  riverpod_generator: ^2.6.3
+  json_serializable: ^6.8.0
+  retrofit_generator: ^9.1.5
+  hive_generator: ^2.0.1
+  freezed: ^2.5.7
+  mocktail: ^1.0.4
+  bloc_test: ^9.1.7
+
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    - assets/images/
