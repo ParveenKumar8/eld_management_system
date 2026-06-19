@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:dartz/dartz.dart';
+import 'package:eld_management_system/core/constants/app_constants.dart';
 import 'package:eld_management_system/core/errors/exceptions.dart';
 import 'package:eld_management_system/core/errors/failures.dart';
 import 'package:eld_management_system/core/logging/app_logger.dart';
@@ -6,6 +9,8 @@ import 'package:eld_management_system/core/utils/typedefs.dart';
 import 'package:eld_management_system/features/auth/data/datasources/auth_local_datasource.dart';
 import 'package:eld_management_system/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:eld_management_system/features/auth/data/models/user_model.dart';
+import 'package:eld_management_system/features/auth/data/sync/profile_pending_store.dart';
+import 'package:eld_management_system/features/auth/data/sync/profile_sync_service.dart';
 import 'package:eld_management_system/features/auth/domain/entities/user.dart';
 import 'package:eld_management_system/features/auth/domain/repositories/auth_repository.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
@@ -16,13 +21,19 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
     required AuthRemoteDataSource remote,
     required AuthLocalDataSource local,
+    ProfileSyncService? profileSync,
+    ProfilePendingStore? profilePending,
     GoogleSignIn? googleSignIn,
   })  : _remote = remote,
         _local = local,
+        _profileSync = profileSync,
+        _profilePending = profilePending,
         _googleSignIn = googleSignIn ?? GoogleSignIn(scopes: ['email']);
 
   final AuthRemoteDataSource _remote;
   final AuthLocalDataSource _local;
+  final ProfileSyncService? _profileSync;
+  final ProfilePendingStore? _profilePending;
   final GoogleSignIn _googleSignIn;
   User? _currentUser;
 
@@ -34,14 +45,10 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       final result = await _tryRemote(
         () async => _remote.signIn(email: email, password: password),
-        fallback: () async => _remote.demoAuth(email: email),
+        fallbackEmail: email,
       );
-      await _local.cacheSession(
-        user: result.user,
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      );
-      _currentUser = result.user.toEntity();
+      await _persistSession(result);
+      await syncProfile();
       return Right(_currentUser!);
     } on AuthException catch (e) {
       return Left(AuthFailure(e.message, code: e.code));
@@ -60,14 +67,10 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       final result = await _tryRemote(
         () async => _remote.signUp(email: email, password: password, displayName: displayName),
-        fallback: () async => _remote.demoAuth(email: email),
+        fallbackEmail: email,
       );
-      await _local.cacheSession(
-        user: result.user,
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      );
-      _currentUser = result.user.toEntity();
+      await _persistSession(result);
+      await syncProfile();
       return Right(_currentUser!);
     } on AuthException catch (e) {
       return Left(AuthFailure(e.message, code: e.code));
@@ -86,14 +89,10 @@ class AuthRepositoryImpl implements AuthRepository {
       final auth = await account.authentication;
       final result = await _tryRemote(
         () async => _remote.socialAuth(provider: 'google', idToken: auth.idToken ?? ''),
-        fallback: () async => _remote.demoAuth(email: account.email),
+        fallbackEmail: account.email,
       );
-      await _local.cacheSession(
-        user: result.user,
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      );
-      _currentUser = result.user.toEntity();
+      await _persistSession(result);
+      await syncProfile();
       return Right(_currentUser!);
     } catch (e) {
       return Left(AuthFailure(e.toString()));
@@ -110,14 +109,10 @@ class AuthRepositoryImpl implements AuthRepository {
       final token = result.accessToken?.tokenString ?? '';
       final auth = await _tryRemote(
         () async => _remote.socialAuth(provider: 'facebook', idToken: token),
-        fallback: () async => _remote.demoAuth(email: 'fb_user@demo.com'),
+        fallbackEmail: 'fb_user@demo.com',
       );
-      await _local.cacheSession(
-        user: auth.user,
-        accessToken: auth.accessToken,
-        refreshToken: auth.refreshToken,
-      );
-      _currentUser = auth.user.toEntity();
+      await _persistSession(auth);
+      await syncProfile();
       return Right(_currentUser!);
     } catch (e) {
       return Left(AuthFailure(e.toString()));
@@ -139,14 +134,10 @@ class AuthRepositoryImpl implements AuthRepository {
           provider: 'apple',
           idToken: credential.identityToken ?? '',
         ),
-        fallback: () async => _remote.demoAuth(email: email),
+        fallbackEmail: email,
       );
-      await _local.cacheSession(
-        user: auth.user,
-        accessToken: auth.accessToken,
-        refreshToken: auth.refreshToken,
-      );
-      _currentUser = auth.user.toEntity();
+      await _persistSession(auth);
+      await syncProfile();
       return Right(_currentUser!);
     } catch (e) {
       return Left(AuthFailure(e.toString()));
@@ -155,8 +146,17 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   ResultFuture<void> signOut() async {
+    final refresh = await _local.getRefreshToken();
+    if (refresh != null && !refresh.startsWith('demo_')) {
+      try {
+        await _remote.logout(refreshToken: refresh);
+      } catch (e) {
+        AppLogger.warning('Remote logout failed', e);
+      }
+    }
     await _googleSignIn.signOut();
     await FacebookAuth.instance.logOut();
+    await _profilePending?.clear();
     await _local.clearSession();
     _currentUser = null;
     return const Right(null);
@@ -165,9 +165,84 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   ResultFuture<User?> getCurrentUser() async {
     if (_currentUser != null) return Right(_currentUser);
+
     final cached = await _local.getCachedUser();
-    _currentUser = cached?.toEntity();
-    return Right(_currentUser);
+    if (cached == null) {
+      _currentUser = null;
+      return const Right(null);
+    }
+
+    final access = await _local.getAccessToken();
+    if (AppConstants.useDemoAuth || access?.startsWith('demo_') == true) {
+      _currentUser = cached.toEntity();
+      return Right(_currentUser);
+    }
+
+    try {
+      final synced = await _profileSync?.syncAll();
+      if (synced != null) {
+        _currentUser = synced.toEntity();
+        return Right(_currentUser);
+      }
+
+      final remoteUser = await _remote.getMe();
+      await _local.updateCachedUser(remoteUser);
+      _currentUser = remoteUser.toEntity();
+      return Right(_currentUser);
+    } on AuthException {
+      await _local.clearSession();
+      _currentUser = null;
+      return const Right(null);
+    }
+  }
+
+  @override
+  ResultFuture<User> updateProfile({
+    String? displayName,
+    String? licenseNumber,
+  }) async {
+    try {
+      final cached = await _local.getCachedUser();
+      if (cached == null) {
+        return const Left(AuthFailure('Not signed in'));
+      }
+
+      final updated = UserModel(
+        id: cached.id,
+        email: cached.email,
+        displayName: displayName ?? cached.displayName,
+        role: cached.role,
+        licenseNumber: licenseNumber ?? cached.licenseNumber,
+        carrierId: cached.carrierId,
+      );
+      await _local.updateCachedUser(updated);
+      _currentUser = updated.toEntity();
+
+      await _profilePending?.save(
+        displayName: displayName,
+        licenseNumber: licenseNumber,
+      );
+
+      if (_profileSync != null && await _profileSync.canSync()) {
+        await _profileSync.pushPending();
+        final fresh = await _profileSync.pullFromServer();
+        if (fresh != null) {
+          _currentUser = fresh.toEntity();
+        }
+      }
+
+      return Right(_currentUser!);
+    } catch (e) {
+      return Left(AuthFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<void> syncProfile() async {
+    final profile = await _profileSync?.syncAll();
+    if (profile != null) {
+      _currentUser = profile.toEntity();
+    }
   }
 
   @override
@@ -178,16 +253,29 @@ class AuthRepositoryImpl implements AuthRepository {
     yield _currentUser;
   }
 
+  Future<void> _persistSession(
+    ({UserModel user, String accessToken, String refreshToken}) result,
+  ) async {
+    await _local.cacheSession(
+      user: result.user,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    );
+    _currentUser = result.user.toEntity();
+  }
+
   Future<({UserModel user, String accessToken, String refreshToken})> _tryRemote(
     Future<({UserModel user, String accessToken, String refreshToken})> Function() remote, {
-    required Future<({UserModel user, String accessToken, String refreshToken})> Function()
-        fallback,
+    required String fallbackEmail,
   }) async {
-    try {
-      return await remote();
-    } on AuthException {
-      AppLogger.warning('Remote auth unavailable, using demo fallback');
-      return fallback();
+    if (AppConstants.useDemoAuth) {
+      try {
+        return await remote();
+      } on AuthException {
+        AppLogger.warning('Remote auth unavailable, using demo fallback');
+        return _remote.demoAuth(email: fallbackEmail);
+      }
     }
+    return remote();
   }
 }

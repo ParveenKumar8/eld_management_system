@@ -69,4 +69,38 @@ class HosCubit extends Cubit<HosState> {
     final result = await _repository.exportForInspection(driverId: driverId, days: 8);
     return result.fold((_) => null, (json) => json);
   }
+
+  Future<void> editRecord({
+    required String driverId,
+    required String recordId,
+    required String annotation,
+    DutyStatus? status,
+  }) async {
+    emit(state.copyWith(status: HosStatus.loading));
+    final result = await _repository.editRecord(
+      driverId: driverId,
+      recordId: recordId,
+      annotation: annotation,
+      status: status,
+    );
+    result.fold(
+      (f) => emit(state.copyWith(status: HosStatus.error, errorMessage: f.message)),
+      (_) => load(driverId),
+    );
+  }
+
+  Future<int?> certifyLogs({required String driverId, int days = 8}) async {
+    emit(state.copyWith(status: HosStatus.loading));
+    final result = await _repository.certifyLogs(driverId: driverId, days: days);
+    return result.fold(
+      (f) {
+        emit(state.copyWith(status: HosStatus.error, errorMessage: f.message));
+        return null;
+      },
+      (count) {
+        load(driverId);
+        return count;
+      },
+    );
+  }
 }

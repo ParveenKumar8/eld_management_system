@@ -42,7 +42,7 @@ class ReportsPage extends ConsumerWidget {
             color: AppColors.amber,
             title: 'Edit Requests',
             subtitle: 'Certified edits with driver annotation',
-            onTap: () => _showEditInfo(context),
+            onTap: () => _showEditCompliance(context, ref, auth.user.id),
           ),
           _ReportCard(
             icon: Icons.upload_file_rounded,
@@ -102,14 +102,27 @@ class ReportsPage extends ConsumerWidget {
     );
   }
 
-  void _showEditInfo(BuildContext context) {
+  Future<void> _showEditCompliance(BuildContext context, WidgetRef ref, String driverId) async {
+    final cubit = ref.read(hosCubitProvider(driverId));
+    await cubit.load(driverId);
+    if (!context.mounted) return;
+    final state = cubit.state;
+    final edited = state.records.where((r) => r.isEdited).toList();
+    final uncertified = state.records.where((r) => r.certifiedAt == null).length;
+
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg,
+          MediaQuery.of(ctx).viewInsets.bottom + AppSpacing.lg,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,10 +136,55 @@ class ReportsPage extends ConsumerWidget {
               'Log edits require driver certification and retain original '
               'records per 49 CFR 395.30. Fleet managers cannot certify on behalf of drivers.',
             ),
+            const SizedBox(height: 16),
+            Text(
+              '$uncertified uncertified · ${edited.length} edited in rolling 8-day window',
+              style: Theme.of(ctx).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            if (edited.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 180),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: edited.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final record = edited[i];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.edit_note_rounded, color: AppColors.amber),
+                      title: Text(record.status.displayName),
+                      subtitle: Text(record.annotation ?? 'No annotation'),
+                    );
+                  },
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Understood'),
+            FilledButton.icon(
+              onPressed: uncertified == 0
+                  ? null
+                  : () async {
+                      Navigator.pop(ctx);
+                      final count = await ref.read(hosCubitProvider(driverId)).certifyLogs(
+                            driverId: driverId,
+                          );
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            count == null
+                                ? 'Certification failed'
+                                : 'Certified $count log entries',
+                          ),
+                        ),
+                      );
+                    },
+              icon: const Icon(Icons.verified_user_rounded),
+              label: Text(
+                uncertified == 0 ? 'All logs certified' : 'Certify last 8 days',
+              ),
             ),
           ],
         ),

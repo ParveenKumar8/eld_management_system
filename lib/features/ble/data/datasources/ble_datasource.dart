@@ -5,6 +5,7 @@ import 'package:eld_management_system/core/errors/exceptions.dart';
 import 'package:eld_management_system/core/logging/app_logger.dart';
 import 'package:eld_management_system/core/strings/ble_strings.dart';
 import 'package:eld_management_system/features/ble/data/parsers/geometris_parser.dart';
+import 'package:eld_management_system/features/ble/data/sync/eld_telemetry_buffer.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_data.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_device.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_device_compatibility.dart';
@@ -13,9 +14,14 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 /// BLE data source using flutter_blue_plus with auto-reconnect.
 class BleDataSource {
-  BleDataSource({required GeometrisParser parser}) : _parser = parser;
+  BleDataSource({
+    required GeometrisParser parser,
+    EldTelemetryBuffer? telemetryBuffer,
+  }) : _parser = parser,
+       _telemetryBuffer = telemetryBuffer;
 
   final GeometrisParser _parser;
+  final EldTelemetryBuffer? _telemetryBuffer;
   final _connectionController = StreamController<EldConnectionState>.broadcast();
   final _dataController = StreamController<EldData>.broadcast();
   final List<EldData> _buffer = [];
@@ -31,6 +37,7 @@ class BleDataSource {
   Stream<EldConnectionState> get connectionState => _connectionController.stream;
   Stream<EldData> get eldDataStream => _dataController.stream;
   List<EldData> get buffer => List.unmodifiable(_buffer);
+  String? get connectedDeviceId => _lastDeviceId;
 
   void clearBuffer() => _buffer.clear();
 
@@ -181,6 +188,10 @@ class BleDataSource {
     if (_buffer.length > 5000) {
       _buffer.removeRange(0, _buffer.length - 5000);
     }
+    final deviceId = _lastDeviceId ?? 'unknown';
+    unawaited(
+      _telemetryBuffer?.append(data: parsed, deviceId: deviceId),
+    );
     _dataController.add(parsed);
   }
 

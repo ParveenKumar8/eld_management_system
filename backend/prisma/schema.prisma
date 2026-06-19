@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  driver
+  fleet_manager
+  admin
+}
+
+enum DutyStatus {
+  D
+  ON
+  OFF
+  SB
+}
+
+model Carrier {
+  id        String   @id @default(uuid())
+  name      String
+  dotNumber String   @unique @map("dot_number")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  users     User[]
+
+  @@map("carriers")
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  passwordHash   String?         @map("password_hash")
+  displayName    String          @map("display_name")
+  role           UserRole        @default(driver)
+  licenseNumber  String?         @map("license_number")
+  carrierId      String?         @map("carrier_id")
+  carrier        Carrier?        @relation(fields: [carrierId], references: [id])
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  refreshTokens  RefreshToken[]
+  deviceTokens   DeviceToken[]
+  hosRecords        HosRecord[]
+  eldTelemetryEvents   EldTelemetryEvent[]
+  locationTrailPoints  LocationTrailPoint[]
+
+  @@map("users")
+}
+
+model LocationTrailPoint {
+  id             String   @id
+  userId         String   @map("user_id")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recordedAt     DateTime @map("recorded_at")
+  latitude       Float
+  longitude      Float
+  accuracyMeters Float?   @map("accuracy_meters")
+  speedMps       Float?   @map("speed_mps")
+  heading        Float?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([userId, recordedAt])
+  @@map("location_trail_points")
+}
+
+model EldTelemetryEvent {
+  id                   String   @id
+  userId               String   @map("user_id")
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId             String   @map("device_id")
+  recordedAt           DateTime @map("recorded_at")
+  engineHours          Float    @map("engine_hours")
+  odometerMiles        Float    @map("odometer_miles")
+  speedMph             Float    @map("speed_mph")
+  isMoving             Boolean  @map("is_moving")
+  latitude             Float?
+  longitude            Float?
+  vin                  String?
+  malfunctionIndicator Boolean  @default(false) @map("malfunction_indicator")
+  diagnosticIndicator  Boolean  @default(false) @map("diagnostic_indicator")
+  rawPayloadHex        String?  @map("raw_payload_hex")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@index([userId, recordedAt])
+  @@index([deviceId, recordedAt])
+  @@map("eld_telemetry_events")
+}
+
+model HosRecord {
+  id          String     @id
+  userId      String     @map("user_id")
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      DutyStatus
+  startTime   DateTime   @map("start_time")
+  endTime     DateTime?  @map("end_time")
+  annotation  String?
+  locationLat Float?     @map("location_lat")
+  locationLng Float?     @map("location_lng")
+  isEdited    Boolean    @default(false) @map("is_edited")
+  certifiedAt DateTime?  @map("certified_at")
+  vehicleId   String?    @map("vehicle_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([userId, startTime])
+  @@map("hos_records")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @map("token_hash")
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  platform  String
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("device_tokens")
+}

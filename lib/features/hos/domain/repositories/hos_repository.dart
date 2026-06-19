@@ -16,4 +16,13 @@ abstract interface class HosRepository {
   ResultFuture<void> logMalfunction({required String driverId, required String code});
   ResultFuture<String> exportForInspection({required String driverId, required int days});
   Stream<List<HosRecord>> watchRecords(String driverId);
+  Future<void> syncPending();
+  ResultFuture<HosRecord> editRecord({
+    required String driverId,
+    required String recordId,
+    required String annotation,
+    DutyStatus? status,
+    DateTime? endTime,
+  });
+  ResultFuture<int> certifyLogs({required String driverId, int days = 8});
 }

@@ -5,6 +5,10 @@ abstract final class AppConstants {
     'API_BASE_URL',
     defaultValue: 'https://api.example-eld.com/v1',
   );
+  static const bool useDemoAuth = bool.fromEnvironment(
+    'USE_DEMO_AUTH',
+    defaultValue: true,
+  );
   static const String googleMapsApiKey = String.fromEnvironment(
     'GOOGLE_MAPS_API_KEY',
     defaultValue: '',
@@ -26,9 +30,13 @@ abstract final class AppConstants {
 
   // Storage keys
   static const String hiveBoxHos = 'hos_records';
+  static const String hiveBoxHosOutbox = 'hos_outbox';
   static const String hiveBoxEld = 'eld_buffer';
+  static const String hiveBoxEldOutbox = 'eld_outbox';
   static const String hiveBoxAuth = 'auth_cache';
   static const String hiveBoxLocation = 'location_trail';
+  static const String hiveBoxLocationOutbox = 'location_outbox';
+  static const String hiveBoxProfilePending = 'profile_pending';
   static const String secureKeyAccessToken = 'access_token';
   static const String secureKeyRefreshToken = 'refresh_token';
 

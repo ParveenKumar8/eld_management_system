@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:eld_management_system/core/location/location_fix.dart';
 import 'package:eld_management_system/core/location/location_store.dart';
+import 'package:eld_management_system/core/location/location_trail_buffer.dart';
 import 'package:eld_management_system/core/location/location_tracking_status.dart';
 import 'package:eld_management_system/core/logging/app_logger.dart';
 import 'package:eld_management_system/core/permissions/eld_permission_kind.dart';
@@ -16,11 +17,14 @@ class LocationTrackingService with WidgetsBindingObserver {
   LocationTrackingService({
     LocationStore? store,
     PermissionService? permissions,
+    LocationTrailBuffer? trailBuffer,
   })  : _store = store ?? LocationStore(),
-        _permissions = permissions ?? PermissionService();
+        _permissions = permissions ?? PermissionService(),
+        _trailBuffer = trailBuffer;
 
   final LocationStore _store;
   final PermissionService _permissions;
+  final LocationTrailBuffer? _trailBuffer;
 
   final _fixController = StreamController<LocationFix>.broadcast();
   final _statusController = StreamController<LocationTrackingStatus>.broadcast();
@@ -189,6 +193,7 @@ class LocationTrackingService with WidgetsBindingObserver {
       _lastPersistedFix = fix;
       _lastPersistedAt = fix.timestamp;
       unawaited(_store.saveFix(driverId: driverId, fix: fix));
+      unawaited(_trailBuffer?.append(driverId: driverId, fix: fix));
     }
   }
 

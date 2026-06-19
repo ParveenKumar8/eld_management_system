@@ -34,15 +34,70 @@ class HosLocalDataSource {
     return record;
   }
 
-  Future<void> closeActiveRecord(String driverId) async {
+  Future<List<HosRecord>> closeActiveRecord(String driverId) async {
     final records = await getRecords(driverId: driverId, days: 2);
     final active = records.where((r) => r.endTime == null).toList();
+    final closed = <HosRecord>[];
+    final now = DateTime.now().toUtc();
     for (final r in active) {
-      await insertRecord(r.copyWith(endTime: DateTime.now().toUtc()));
+      closed.add(await insertRecord(r.copyWith(endTime: now)));
+    }
+    return closed;
+  }
+
+  Future<HosRecord?> getRecordById(String recordId) async {
+    final box = await _box();
+    final json = box.get(recordId);
+    if (json == null) return null;
+    return _fromJson(json);
+  }
+
+  Future<HosRecord> editRecord({
+    required String recordId,
+    required String driverId,
+    required String annotation,
+    DutyStatus? status,
+    DateTime? endTime,
+  }) async {
+    final existing = await getRecordById(recordId);
+    if (existing == null || existing.driverId != driverId) {
+      throw StateError('HOS record not found');
+    }
+    final updated = existing.copyWith(
+      annotation: annotation,
+      status: status,
+      endTime: endTime,
+      isEdited: true,
+    );
+    return insertRecord(updated);
+  }
+
+  Future<List<HosRecord>> certifyLogs({
+    required String driverId,
+    int days = 8,
+  }) async {
+    final records = await getRecords(driverId: driverId, days: days);
+    final now = DateTime.now().toUtc();
+    final certified = <HosRecord>[];
+    for (final record in records) {
+      if (record.certifiedAt != null) {
+        certified.add(record);
+        continue;
+      }
+      certified.add(await insertRecord(record.copyWith(certifiedAt: now)));
+    }
+    return certified;
+  }
+
+  Future<void> mergeRecords(List<HosRecord> records) async {
+    if (records.isEmpty) return;
+    final box = await _box();
+    for (final record in records) {
+      await box.put(record.id, _toJson(record));
     }
   }
 
-  Future<HosRecord> createDutyChange({
+  Future<({List<HosRecord> closed, HosRecord created})> createDutyChange({
     required String driverId,
     required DutyStatus status,
     String? annotation,
@@ -50,7 +105,7 @@ class HosLocalDataSource {
     double? lng,
     String? vehicleId,
   }) async {
-    await closeActiveRecord(driverId);
+    final closed = await closeActiveRecord(driverId);
     final record = HosRecord(
       id: _uuid.v4(),
       driverId: driverId,
@@ -61,7 +116,7 @@ class HosLocalDataSource {
       locationLng: lng,
       vehicleId: vehicleId,
     );
-    return insertRecord(record);
+    return (closed: closed, created: await insertRecord(record));
   }
 
   Future<String> exportJson({required String driverId, required int days}) async {

@@ -11,6 +11,7 @@ class EldTimelineTile extends StatelessWidget {
     this.isFirst = false,
     this.isLast = false,
     this.trailing,
+    this.onTap,
     super.key,
   });
 
@@ -21,6 +22,7 @@ class EldTimelineTile extends StatelessWidget {
   final bool isFirst;
   final bool isLast;
   final Widget? trailing;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -62,11 +64,16 @@ class EldTimelineTile extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
-            child: Container(
+            child: Material(
+              color: Theme.of(context).cardTheme.color,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                child: Container(
               margin: const EdgeInsets.only(bottom: AppSpacing.md),
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                color: Theme.of(context).cardTheme.color,
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 border: Border.all(
                   color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
@@ -104,6 +111,8 @@ class EldTimelineTile extends StatelessWidget {
                   ),
                   if (trailing != null) trailing!,
                 ],
+              ),
+            ),
               ),
             ),
           ),

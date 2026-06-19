@@ -16,6 +16,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthFacebookSignInRequested>(_onFacebook);
     on<AuthAppleSignInRequested>(_onApple);
     on<AuthSignOutRequested>(_onSignOut);
+    on<AuthProfileUpdateRequested>(_onProfileUpdate);
   }
 
   final AuthRepository _repository;
@@ -102,5 +103,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSignOut(AuthSignOutRequested event, Emitter<AuthState> emit) async {
     await _repository.signOut();
     emit(const AuthUnauthenticated());
+  }
+
+  Future<void> _onProfileUpdate(
+    AuthProfileUpdateRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    final current = state;
+    if (current is! AuthAuthenticated) return;
+
+    final result = await _repository.updateProfile(
+      displayName: event.displayName,
+      licenseNumber: event.licenseNumber,
+    );
+    result.fold(
+      (f) => emit(AuthError(f.message)),
+      (user) => emit(AuthAuthenticated(user)),
+    );
   }
 }

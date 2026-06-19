@@ -23,6 +23,7 @@ void main() {
 
   setUp(() {
     repository = MockAuthRepository();
+    when(() => repository.syncProfile()).thenAnswer((_) async {});
     bloc = AuthBloc(repository);
   });
 

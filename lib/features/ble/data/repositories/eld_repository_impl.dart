@@ -6,15 +6,25 @@ import 'package:eld_management_system/core/permissions/permission_service.dart';
 import 'package:eld_management_system/core/permissions/permission_status_info.dart';
 import 'package:eld_management_system/core/utils/typedefs.dart';
 import 'package:eld_management_system/features/ble/data/datasources/ble_datasource.dart';
+import 'package:eld_management_system/features/ble/data/datasources/eld_local_datasource.dart';
+import 'package:eld_management_system/features/ble/data/sync/eld_sync_service.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_data.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_device.dart';
 import 'package:eld_management_system/features/ble/domain/repositories/eld_repository.dart';
 
 class EldRepositoryImpl implements EldRepository {
-  EldRepositoryImpl(this._ble, this._permissions);
+  EldRepositoryImpl(
+    this._ble,
+    this._permissions, {
+    EldLocalDataSource? local,
+    EldSyncService? sync,
+  })  : _local = local,
+        _sync = sync;
 
   final BleDataSource _ble;
   final PermissionService _permissions;
+  final EldLocalDataSource? _local;
+  final EldSyncService? _sync;
 
   @override
   ResultFuture<List<PermissionStatusInfo>> getPermissionStatuses() async {
@@ -107,11 +117,26 @@ class EldRepositoryImpl implements EldRepository {
   Stream<EldConnectionState> watchConnectionState() => _ble.connectionState;
 
   @override
-  ResultFuture<List<EldData>> getBufferedData() async => Right(_ble.buffer);
+  ResultFuture<List<EldData>> getBufferedData() async {
+    final local = _local;
+    if (local != null) {
+      final persisted = await local.listRecent();
+      if (persisted.isNotEmpty) {
+        return Right(persisted.map((record) => record.data).toList());
+      }
+    }
+    return Right(_ble.buffer);
+  }
 
   @override
   ResultFuture<void> flushBuffer() async {
+    await _sync?.flushOutbox();
     _ble.clearBuffer();
     return const Right(null);
+  }
+
+  @override
+  Future<void> syncPending() async {
+    await _sync?.flushOutbox();
   }
 }

@@ -13,5 +13,10 @@ abstract interface class AuthRepository {
   ResultFuture<User> signInWithApple();
   ResultFuture<void> signOut();
   ResultFuture<User?> getCurrentUser();
+  ResultFuture<User> updateProfile({
+    String? displayName,
+    String? licenseNumber,
+  });
+  Future<void> syncProfile();
   Stream<User?> watchAuthState();
 }

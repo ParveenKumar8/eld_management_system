@@ -6,12 +6,60 @@ import 'package:eld_management_system/core/widgets/eld_page_header.dart';
 import 'package:eld_management_system/core/widgets/eld_screen.dart';
 import 'package:eld_management_system/core/widgets/eld_primary_button.dart';
 import 'package:eld_management_system/core/widgets/eld_status_badge.dart';
+import 'package:eld_management_system/features/auth/domain/entities/user.dart';
 import 'package:eld_management_system/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
+
+  Future<void> _showEditDialog(BuildContext context, User user) async {
+    final nameController = TextEditingController(text: user.displayName);
+    final licenseController = TextEditingController(text: user.licenseNumber ?? '');
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit Profile'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Display name'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: licenseController,
+              decoration: const InputDecoration(labelText: 'CDL number'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved != true || !context.mounted) return;
+
+    context.read<AuthBloc>().add(
+          AuthProfileUpdateRequested(
+            displayName: nameController.text.trim(),
+            licenseNumber: licenseController.text.trim().isEmpty
+                ? null
+                : licenseController.text.trim(),
+          ),
+        );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +166,13 @@ class ProfilePage extends StatelessWidget {
                       label: 'Carrier ID',
                       value: user.carrierId!,
                     ),
-                  const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(height: AppSpacing.md),
+                  EldPrimaryButton(
+                    label: 'Edit Profile',
+                    icon: Icons.edit_rounded,
+                    onPressed: () => _showEditDialog(context, user),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
                   EldPrimaryButton(
                     label: 'Sign Out',
                     icon: Icons.logout_rounded,

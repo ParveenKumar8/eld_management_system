@@ -1,5 +1,6 @@
 import 'package:eld_management_system/core/constants/app_constants.dart';
 import 'package:eld_management_system/core/logging/app_logger.dart';
+import 'package:eld_management_system/features/background/background_sync.dart';
 import 'package:workmanager/workmanager.dart';
 
 /// Background sync and BLE persistence coordination.
@@ -20,7 +21,9 @@ abstract final class BackgroundService {
       AppLogger.info('Background workmanager registered');
     } catch (e) {
       AppLogger.warning(
-          'Workmanager init skipped (platform may not support)', e);
+        'Workmanager init skipped (platform may not support)',
+        e,
+      );
     }
   }
 }
@@ -29,7 +32,9 @@ abstract final class BackgroundService {
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     AppLogger.info('Background task: $task');
-    // Sync buffered ELD data to backend when connectivity restored
+    if (task == AppConstants.workmanagerTaskSync) {
+      await runBackgroundSync();
+    }
     return Future.value(true);
   });
 }

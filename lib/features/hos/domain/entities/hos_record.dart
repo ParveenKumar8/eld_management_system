@@ -35,6 +35,7 @@ class HosRecord extends Equatable {
   }
 
   HosRecord copyWith({
+    DutyStatus? status,
     DateTime? endTime,
     String? annotation,
     bool? isEdited,
@@ -43,7 +44,7 @@ class HosRecord extends Equatable {
     return HosRecord(
       id: id,
       driverId: driverId,
-      status: status,
+      status: status ?? this.status,
       startTime: startTime,
       endTime: endTime ?? this.endTime,
       annotation: annotation ?? this.annotation,

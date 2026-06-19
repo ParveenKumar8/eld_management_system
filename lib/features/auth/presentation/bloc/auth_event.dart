@@ -46,3 +46,16 @@ final class AuthAppleSignInRequested extends AuthEvent {
 final class AuthSignOutRequested extends AuthEvent {
   const AuthSignOutRequested();
 }
+
+final class AuthProfileUpdateRequested extends AuthEvent {
+  const AuthProfileUpdateRequested({
+    this.displayName,
+    this.licenseNumber,
+  });
+
+  final String? displayName;
+  final String? licenseNumber;
+
+  @override
+  List<Object?> get props => [displayName, licenseNumber];
+}

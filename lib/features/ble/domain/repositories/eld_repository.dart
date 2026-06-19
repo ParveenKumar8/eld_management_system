@@ -17,4 +17,5 @@ abstract interface class EldRepository {
   Stream<EldConnectionState> watchConnectionState();
   ResultFuture<List<EldData>> getBufferedData();
   ResultFuture<void> flushBuffer();
+  Future<void> syncPending();
 }

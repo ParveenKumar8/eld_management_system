@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: eld
+      POSTGRES_PASSWORD: eld_secret
+      POSTGRES_DB: eld_management
+    ports:
+      - "5432:5432"
+    volumes:
+      - eld_pg_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://eld:eld_secret@postgres:5432/eld_management?schema=public
+      JWT_ACCESS_SECRET: dev-access-secret-change-in-production-32c
+      JWT_REFRESH_SECRET: dev-refresh-secret-change-in-production-32c
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL_DAYS: 30
+      CORS_ORIGIN: "*"
+    ports:
+      - "3000:3000"
+
+volumes:
+  eld_pg_data:

@@ -1,0 +1,582 @@
+openapi: 3.0.3
+info:
+  title: ELD Management API
+  version: 1.0.0
+  description: FMCSA-oriented fleet and driver REST API
+servers:
+  - url: https://api.example-eld.com/v1
+  - url: http://localhost:3000/v1
+paths:
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register driver account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponseEnvelope'
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Email login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponseEnvelope'
+  /auth/social:
+    post:
+      tags: [auth]
+      summary: Social provider token exchange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialAuthRequest'
+      responses:
+        '200':
+          description: Authenticated
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotate access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Refreshed
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Invalidate refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+  /auth/me:
+    get:
+      tags: [auth]
+      security: [{ bearerAuth: [] }]
+      summary: Current user profile
+      responses:
+        '200':
+          description: Profile
+  /drivers/me:
+    get:
+      tags: [drivers]
+      security: [{ bearerAuth: [] }]
+      summary: Driver profile
+    patch:
+      tags: [drivers]
+      security: [{ bearerAuth: [] }]
+      summary: Update driver profile
+  /carriers/me:
+    get:
+      tags: [carriers]
+      security: [{ bearerAuth: [] }]
+      summary: Carrier DOT info
+  /notifications/device-token:
+    post:
+      tags: [notifications]
+      security: [{ bearerAuth: [] }]
+      summary: Register FCM device token
+    delete:
+      tags: [notifications]
+      security: [{ bearerAuth: [] }]
+      summary: Unregister FCM device token
+  /notifications/push:
+    post:
+      tags: [notifications]
+      security: [{ bearerAuth: [] }]
+      summary: Fleet manager sends FCM alert to drivers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendFleetPushRequest'
+      responses:
+        '200':
+          description: Push delivery summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetPushResultEnvelope'
+  /hos/records:
+    get:
+      tags: [hos]
+      security: [{ bearerAuth: [] }]
+      summary: List HOS log records for the authenticated driver
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 30, default: 8 }
+      responses:
+        '200':
+          description: HOS records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HosRecordsEnvelope'
+  /hos/records/sync:
+    post:
+      tags: [hos]
+      security: [{ bearerAuth: [] }]
+      summary: Batch upsert HOS records from mobile outbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HosSyncRequest'
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HosSyncResultEnvelope'
+  /hos/summary:
+    get:
+      tags: [hos]
+      security: [{ bearerAuth: [] }]
+      summary: FMCSA HOS summary for the authenticated driver
+      responses:
+        '200':
+          description: HOS summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HosSummaryEnvelope'
+  /hos/records/{id}:
+    patch:
+      tags: [hos]
+      security: [{ bearerAuth: [] }]
+      summary: Certify a driver log edit with required annotation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EditHosRecordRequest'
+      responses:
+        '200':
+          description: Updated record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HosRecordEnvelope'
+  /hos/certify:
+    post:
+      tags: [hos]
+      security: [{ bearerAuth: [] }]
+      summary: Driver certifies HOS logs for the rolling window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertifyHosRequest'
+      responses:
+        '200':
+          description: Certification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HosCertifyEnvelope'
+  /eld/telemetry/batch:
+    post:
+      tags: [eld]
+      security: [{ bearerAuth: [] }]
+      summary: Batch upload buffered ELD telemetry from mobile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EldTelemetryBatchRequest'
+      responses:
+        '200':
+          description: Batch upload result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EldTelemetryBatchResultEnvelope'
+  /location/trail/batch:
+    post:
+      tags: [location]
+      security: [{ bearerAuth: [] }]
+      summary: Batch upload GPS trail points from mobile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationTrailBatchRequest'
+      responses:
+        '200':
+          description: Batch upload result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationTrailBatchResultEnvelope'
+  /location/trail:
+    get:
+      tags: [location]
+      security: [{ bearerAuth: [] }]
+      summary: GPS trail for the authenticated driver
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 30, default: 8 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 500 }
+      responses:
+        '200':
+          description: Trail points
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationTrailListEnvelope'
+  /eld/telemetry:
+    get:
+      tags: [eld]
+      security: [{ bearerAuth: [] }]
+      summary: Recent ELD telemetry for the authenticated driver
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Telemetry events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EldTelemetryListEnvelope'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password, display_name]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        display_name: { type: string }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    SocialAuthRequest:
+      type: object
+      required: [provider, id_token]
+      properties:
+        provider: { type: string, enum: [google, facebook, apple] }
+        id_token: { type: string }
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        display_name: { type: string }
+        role: { type: string, enum: [driver, fleet_manager, admin] }
+        license_number: { type: string, nullable: true }
+        carrier_id: { type: string, nullable: true }
+    AuthResponse:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        access_token: { type: string }
+        refresh_token: { type: string }
+    ApiEnvelope:
+      type: object
+      properties:
+        data: { nullable: true }
+        error:
+          type: object
+          nullable: true
+          properties:
+            code: { type: string }
+            message: { type: string }
+    AuthResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/AuthResponse' }
+    HosRecord:
+      type: object
+      required: [id, driver_id, status, start_time]
+      properties:
+        id: { type: string, format: uuid }
+        driver_id: { type: string }
+        status: { type: string, enum: [D, ON, OFF, SB] }
+        start_time: { type: string, format: date-time }
+        end_time: { type: string, format: date-time, nullable: true }
+        annotation: { type: string, nullable: true }
+        location_lat: { type: number, nullable: true }
+        location_lng: { type: number, nullable: true }
+        is_edited: { type: boolean, default: false }
+        certified_at: { type: string, format: date-time, nullable: true }
+        vehicle_id: { type: string, nullable: true }
+    HosSyncRequest:
+      type: object
+      required: [records]
+      properties:
+        records:
+          type: array
+          items: { $ref: '#/components/schemas/HosRecord' }
+    HosSyncResult:
+      type: object
+      properties:
+        accepted:
+          type: array
+          items: { type: string }
+        rejected:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              reason: { type: string }
+    HosSummary:
+      type: object
+      properties:
+        remaining_drive_minutes: { type: integer }
+        remaining_on_duty_minutes: { type: integer }
+        remaining_cycle_minutes: { type: integer }
+        driving_minutes_today: { type: integer }
+        on_duty_minutes_today: { type: integer }
+        off_duty_minutes_since_last_reset: { type: integer }
+        is_in_violation: { type: boolean }
+        violation_message: { type: string, nullable: true }
+    HosRecordsEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                records:
+                  type: array
+                  items: { $ref: '#/components/schemas/HosRecord' }
+    HosSyncResultEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/HosSyncResult' }
+    HosSummaryEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/HosSummary' }
+    EldTelemetryEvent:
+      type: object
+      required: [id, driver_id, device_id, recorded_at, engine_hours, odometer_miles, speed_mph, is_moving]
+      properties:
+        id: { type: string, format: uuid }
+        driver_id: { type: string }
+        device_id: { type: string }
+        recorded_at: { type: string, format: date-time }
+        engine_hours: { type: number }
+        odometer_miles: { type: number }
+        speed_mph: { type: number }
+        is_moving: { type: boolean }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+        vin: { type: string, nullable: true }
+        malfunction_indicator: { type: boolean, default: false }
+        diagnostic_indicator: { type: boolean, default: false }
+        raw_payload_hex: { type: string, nullable: true }
+    EldTelemetryBatchRequest:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/EldTelemetryEvent' }
+    EldTelemetryBatchResult:
+      type: object
+      properties:
+        accepted:
+          type: array
+          items: { type: string }
+        rejected:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              reason: { type: string }
+    EldTelemetryListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                events:
+                  type: array
+                  items: { $ref: '#/components/schemas/EldTelemetryEvent' }
+    EldTelemetryBatchResultEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/EldTelemetryBatchResult' }
+    LocationTrailPoint:
+      type: object
+      required: [id, driver_id, recorded_at, latitude, longitude]
+      properties:
+        id: { type: string, format: uuid }
+        driver_id: { type: string }
+        recorded_at: { type: string, format: date-time }
+        latitude: { type: number }
+        longitude: { type: number }
+        accuracy_meters: { type: number, nullable: true }
+        speed_mps: { type: number, nullable: true }
+        heading: { type: number, nullable: true }
+    LocationTrailBatchRequest:
+      type: object
+      required: [points]
+      properties:
+        points:
+          type: array
+          items: { $ref: '#/components/schemas/LocationTrailPoint' }
+    LocationTrailBatchResult:
+      type: object
+      properties:
+        accepted:
+          type: array
+          items: { type: string }
+        rejected:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              reason: { type: string }
+    LocationTrailListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                points:
+                  type: array
+                  items: { $ref: '#/components/schemas/LocationTrailPoint' }
+    LocationTrailBatchResultEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/LocationTrailBatchResult' }
+    EditHosRecordRequest:
+      type: object
+      required: [annotation]
+      properties:
+        annotation: { type: string, minLength: 1 }
+        end_time: { type: string, format: date-time, nullable: true }
+        status: { type: string, enum: [D, ON, OFF, SB] }
+    CertifyHosRequest:
+      type: object
+      properties:
+        days: { type: integer, minimum: 1, maximum: 30, default: 8 }
+    HosCertifyResult:
+      type: object
+      properties:
+        certified_count: { type: integer }
+        certified_at: { type: string, format: date-time }
+        records:
+          type: array
+          items: { $ref: '#/components/schemas/HosRecord' }
+    HosRecordEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/HosRecord' }
+    HosCertifyEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/HosCertifyResult' }
+    SendFleetPushRequest:
+      type: object
+      required: [type, title, body]
+      properties:
+        driver_ids:
+          type: array
+          items: { type: string }
+        type: { type: string }
+        title: { type: string }
+        body: { type: string }
+        detail: { type: string }
+        route: { type: string }
+    FleetPushResult:
+      type: object
+      properties:
+        targeted_drivers: { type: integer }
+        device_tokens: { type: integer }
+        sent: { type: integer }
+        failed: { type: integer }
+        skipped: { type: integer }
+        mode: { type: string, enum: [fcm, fcm_disabled, no_tokens] }
+    FleetPushResultEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/FleetPushResult' }
