@@ -77,3 +77,14 @@ Mobile edits logs locally first, syncs via outbox when online, and drivers certi
 
 - Email: `fleet@demo.eld`
 - Password: `fleet123`
+
+## Fleet manager endpoints (Phase 7)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/fleet/overview` | Carrier-wide compliance metrics |
+| GET | `/fleet/drivers` | Drivers with HOS snapshot (violation, uncertified, edited) |
+| GET | `/fleet/drivers/:id/hos/records` | Read-only driver logs |
+| GET | `/fleet/drivers/:id/hos/summary` | Driver HOS summary |
+
+Fleet managers are scoped to their `carrier_id`; admins see all drivers. Mobile shows a fleet dashboard, driver detail, and push composer when signed in as `fleet_manager` or `admin`.

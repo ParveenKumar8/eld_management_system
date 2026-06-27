@@ -9,6 +9,7 @@ import 'package:eld_management_system/core/widgets/eld_screen.dart';
 import 'package:eld_management_system/core/widgets/eld_section_header.dart';
 
 import 'package:eld_management_system/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:eld_management_system/features/fleet/presentation/pages/fleet_dashboard_page.dart';
 import 'package:eld_management_system/features/ble/domain/entities/eld_device.dart';
 import 'package:eld_management_system/features/ble/presentation/bloc/eld_bloc.dart';
 import 'package:eld_management_system/features/hos/domain/entities/duty_status.dart';
@@ -48,6 +49,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final authState = context.watch<AuthBloc>().state;
     if (authState is! AuthAuthenticated) {
       return const EldScreen(child: Center(child: CircularProgressIndicator()));
+    }
+    if (authState.user.role.canManageFleet()) {
+      return const FleetDashboardPage();
     }
     final driverId = authState.user.id;
     final hosCubit = ref.watch(hosCubitProvider(driverId));

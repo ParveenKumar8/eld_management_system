@@ -7,6 +7,8 @@ import 'package:eld_management_system/features/auth/domain/repositories/auth_rep
 import 'package:eld_management_system/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:eld_management_system/features/ble/domain/repositories/eld_repository.dart';
 import 'package:eld_management_system/features/ble/presentation/bloc/eld_bloc.dart';
+import 'package:eld_management_system/features/fleet/domain/repositories/fleet_repository.dart';
+import 'package:eld_management_system/features/fleet/presentation/cubit/fleet_cubit.dart';
 import 'package:eld_management_system/features/hos/domain/repositories/hos_repository.dart';
 import 'package:eld_management_system/features/hos/presentation/cubit/hos_cubit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +19,8 @@ final eldRepositoryProvider =
     Provider<EldRepository>((ref) => sl<EldRepository>());
 final hosRepositoryProvider =
     Provider<HosRepository>((ref) => sl<HosRepository>());
+final fleetRepositoryProvider =
+    Provider<FleetRepository>((ref) => sl<FleetRepository>());
 
 final authBlocProvider = Provider<AuthBloc>((ref) {
   final bloc = AuthBloc(ref.watch(authRepositoryProvider));
@@ -46,6 +50,12 @@ final locationTrackingStatusProvider =
   final service = ref.watch(locationTrackingServiceProvider);
   yield service.status;
   yield* service.statusStream;
+});
+
+final fleetCubitProvider = Provider<FleetCubit>((ref) {
+  final cubit = FleetCubit(ref.watch(fleetRepositoryProvider));
+  ref.onDispose(cubit.close);
+  return cubit;
 });
 
 final hosCubitProvider = Provider.family<HosCubit, String>((ref, driverId) {

@@ -30,6 +30,9 @@ import 'package:eld_management_system/features/ble/data/sync/eld_outbox_store.da
 import 'package:eld_management_system/features/ble/data/sync/eld_sync_service.dart';
 import 'package:eld_management_system/features/ble/data/sync/eld_telemetry_buffer.dart';
 import 'package:eld_management_system/features/ble/domain/repositories/eld_repository.dart';
+import 'package:eld_management_system/features/fleet/data/datasources/fleet_remote_datasource.dart';
+import 'package:eld_management_system/features/fleet/data/repositories/fleet_repository_impl.dart';
+import 'package:eld_management_system/features/fleet/domain/repositories/fleet_repository.dart';
 import 'package:eld_management_system/features/hos/data/datasources/hos_local_datasource.dart';
 import 'package:eld_management_system/features/hos/data/datasources/hos_remote_datasource.dart';
 import 'package:eld_management_system/features/hos/data/repositories/hos_repository_impl.dart';
@@ -181,6 +184,13 @@ Future<void> configureDependencies() async {
       sync: sl<HosSyncService>(),
       remote: sl<HosRemoteDataSource>(),
     ),
+  );
+
+  sl.registerLazySingleton<FleetRemoteDataSource>(
+    () => FleetRemoteDataSource(sl<Dio>()),
+  );
+  sl.registerLazySingleton<FleetRepository>(
+    () => FleetRepositoryImpl(sl<FleetRemoteDataSource>()),
   );
 
   sl.registerFactory<AuthBloc>(() => AuthBloc(sl<AuthRepository>()));

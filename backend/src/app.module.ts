@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { DriversModule } from './drivers/drivers.module';
 import { EldModule } from './eld/eld.module';
 import { LocationModule } from './location/location.module';
+import { FleetModule } from './fleet/fleet.module';
 import { HosModule } from './hos/hos.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -16,6 +17,7 @@ import { PrismaModule } from './prisma/prisma.module';
     DriversModule,
     NotificationsModule,
     HosModule,
+    FleetModule,
     EldModule,
     LocationModule,
   ],

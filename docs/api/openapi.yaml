@@ -268,6 +268,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocationTrailListEnvelope'
+  /fleet/overview:
+    get:
+      tags: [fleet]
+      security: [{ bearerAuth: [] }]
+      summary: Fleet-wide compliance overview (fleet_manager / admin)
+      responses:
+        '200':
+          description: Overview metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetOverviewEnvelope'
+  /fleet/drivers:
+    get:
+      tags: [fleet]
+      security: [{ bearerAuth: [] }]
+      summary: List carrier drivers with HOS compliance snapshot
+      responses:
+        '200':
+          description: Driver list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetDriversEnvelope'
+  /fleet/drivers/{driverId}/hos/records:
+    get:
+      tags: [fleet]
+      security: [{ bearerAuth: [] }]
+      summary: HOS records for a driver in the fleet manager's carrier
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 30, default: 8 }
+      responses:
+        '200':
+          description: Driver HOS records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HosRecordsEnvelope'
+  /fleet/drivers/{driverId}/hos/summary:
+    get:
+      tags: [fleet]
+      security: [{ bearerAuth: [] }]
+      summary: HOS summary for a driver in the fleet manager's carrier
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Driver HOS summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HosSummaryEnvelope'
   /eld/telemetry:
     get:
       tags: [eld]
@@ -580,3 +641,40 @@ components:
         - type: object
           properties:
             data: { $ref: '#/components/schemas/FleetPushResult' }
+    FleetDriverSnapshot:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            current_status: { type: string, enum: [D, ON, OFF, SB], nullable: true }
+            is_in_violation: { type: boolean }
+            violation_message: { type: string, nullable: true }
+            remaining_drive_minutes: { type: integer }
+            uncertified_count: { type: integer }
+            edited_count: { type: integer }
+            has_push_token: { type: boolean }
+    FleetOverview:
+      type: object
+      properties:
+        driver_count: { type: integer }
+        violation_count: { type: integer }
+        uncertified_driver_count: { type: integer }
+        edited_driver_count: { type: integer }
+        registered_push_tokens: { type: integer }
+    FleetDriversEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                drivers:
+                  type: array
+                  items: { $ref: '#/components/schemas/FleetDriverSnapshot' }
+    FleetOverviewEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/FleetOverview' }

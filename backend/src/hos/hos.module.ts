@@ -5,5 +5,6 @@ import { HosService } from './hos.service';
 @Module({
   controllers: [HosController],
   providers: [HosService],
+  exports: [HosService],
 })
 export class HosModule {}

@@ -3,6 +3,8 @@ import 'package:eld_management_system/features/auth/presentation/pages/login_pag
 import 'package:eld_management_system/features/auth/presentation/pages/signup_page.dart';
 import 'package:eld_management_system/features/auth/presentation/pages/splash_page.dart';
 import 'package:eld_management_system/features/dashboard/presentation/pages/dashboard_page.dart';
+import 'package:eld_management_system/features/fleet/presentation/pages/fleet_driver_detail_page.dart';
+import 'package:eld_management_system/features/fleet/presentation/pages/fleet_push_page.dart';
 import 'package:eld_management_system/features/devices/presentation/pages/devices_page.dart';
 import 'package:eld_management_system/features/logs/presentation/pages/logs_page.dart';
 import 'package:eld_management_system/features/profile/presentation/pages/profile_page.dart';
@@ -22,6 +24,8 @@ class AppRoutes {
   static const reports = '/reports';
   static const profile = '/profile';
   static const settings = '/settings';
+  static const fleetPush = '/fleet/push';
+  static String fleetDriverPath(String driverId) => '/fleet/drivers/$driverId';
 }
 
 /// Pure redirect logic — testable without GoRouter.
@@ -97,6 +101,16 @@ GoRouter createAppRouter(AuthBloc authBloc) {
           GoRoute(
             path: AppRoutes.settings,
             builder: (_, __) => const SettingsPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.fleetPush,
+            builder: (_, __) => const FleetPushPage(),
+          ),
+          GoRoute(
+            path: '/fleet/drivers/:driverId',
+            builder: (_, state) => FleetDriverDetailPage(
+              driverId: state.pathParameters['driverId']!,
+            ),
           ),
         ],
       ),

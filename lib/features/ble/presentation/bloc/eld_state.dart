@@ -92,9 +92,11 @@ final class EldInitial extends EldState {
         permissionStatuses: permissionStatuses ?? this.permissionStatuses,
         permissionsLoading: permissionsLoading ?? this.permissionsLoading,
         scanPhase: scanPhase ?? this.scanPhase,
-        scanStartedAt: clearScanStartedAt ? null : (scanStartedAt ?? this.scanStartedAt),
-        verifyingDeviceId:
-            clearVerifyingDeviceId ? null : (verifyingDeviceId ?? this.verifyingDeviceId),
+        scanStartedAt:
+            clearScanStartedAt ? null : (scanStartedAt ?? this.scanStartedAt),
+        verifyingDeviceId: clearVerifyingDeviceId
+            ? null
+            : (verifyingDeviceId ?? this.verifyingDeviceId),
       );
 }
 
@@ -133,9 +135,11 @@ final class EldScanning extends EldState {
         permissionStatuses: permissionStatuses ?? this.permissionStatuses,
         permissionsLoading: permissionsLoading ?? this.permissionsLoading,
         scanPhase: scanPhase ?? this.scanPhase,
-        scanStartedAt: clearScanStartedAt ? null : (scanStartedAt ?? this.scanStartedAt),
-        verifyingDeviceId:
-            clearVerifyingDeviceId ? null : (verifyingDeviceId ?? this.verifyingDeviceId),
+        scanStartedAt:
+            clearScanStartedAt ? null : (scanStartedAt ?? this.scanStartedAt),
+        verifyingDeviceId: clearVerifyingDeviceId
+            ? null
+            : (verifyingDeviceId ?? this.verifyingDeviceId),
       );
 }
 
@@ -174,9 +178,11 @@ final class EldConnected extends EldState {
         permissionStatuses: permissionStatuses ?? this.permissionStatuses,
         permissionsLoading: permissionsLoading ?? this.permissionsLoading,
         scanPhase: scanPhase ?? this.scanPhase,
-        scanStartedAt: clearScanStartedAt ? null : (scanStartedAt ?? this.scanStartedAt),
-        verifyingDeviceId:
-            clearVerifyingDeviceId ? null : (verifyingDeviceId ?? this.verifyingDeviceId),
+        scanStartedAt:
+            clearScanStartedAt ? null : (scanStartedAt ?? this.scanStartedAt),
+        verifyingDeviceId: clearVerifyingDeviceId
+            ? null
+            : (verifyingDeviceId ?? this.verifyingDeviceId),
       );
 }
 
@@ -200,18 +206,18 @@ final class EldError extends EldState {
     bool clearVerifyingDeviceId = false,
   }) =>
       previous?.copyWith(
-            devices: devices,
-            connectionState: connectionState,
-            latestData: latestData,
-            permissionsGranted: permissionsGranted,
-            permissionStatuses: permissionStatuses,
-            permissionsLoading: permissionsLoading,
-            scanPhase: scanPhase,
-            scanStartedAt: scanStartedAt,
-            clearScanStartedAt: clearScanStartedAt,
-            verifyingDeviceId: verifyingDeviceId,
-            clearVerifyingDeviceId: clearVerifyingDeviceId,
-          ) ??
+        devices: devices,
+        connectionState: connectionState,
+        latestData: latestData,
+        permissionsGranted: permissionsGranted,
+        permissionStatuses: permissionStatuses,
+        permissionsLoading: permissionsLoading,
+        scanPhase: scanPhase,
+        scanStartedAt: scanStartedAt,
+        clearScanStartedAt: clearScanStartedAt,
+        verifyingDeviceId: verifyingDeviceId,
+        clearVerifyingDeviceId: clearVerifyingDeviceId,
+      ) ??
       const EldInitial();
 
   @override
